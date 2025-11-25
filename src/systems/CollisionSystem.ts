@@ -67,10 +67,11 @@ export class CollisionSystem {
     }
 
     // Check against shields (player shots can damage shields from below)
+    // Player shots do 5x damage to shields
     for (const shield of shields) {
       const boundingBox = shield.getBoundingBox();
       if (boundingBox.containsPoint(pos)) {
-        const hitResult = shield.checkHit(pos, sphere.radius);
+        const hitResult = shield.checkHit(pos, sphere.radius, 5);
         if (hitResult.hit && hitResult.position) {
           result.shieldHits.push({ shield, position: hitResult.position });
           result.destroyedProjectiles.push(projectile);

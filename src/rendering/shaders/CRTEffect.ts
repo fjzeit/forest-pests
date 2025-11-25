@@ -116,9 +116,9 @@ export class CRTEffect {
     // Bloom pass (for the glow effect)
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.5,   // strength
-      0.4,   // radius
-      0.85   // threshold
+      0.25,  // strength (reduced to avoid large muzzle flash)
+      0.3,   // radius
+      0.92   // threshold (increased so less blooms)
     );
     this.composer.addPass(bloomPass);
 

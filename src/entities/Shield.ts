@@ -158,7 +158,8 @@ export class Shield {
   }
 
   // Check if a point hits the shield and damage it - returns hit info for explosion
-  checkHit(point: THREE.Vector3, radius: number): ShieldHitResult {
+  // damage parameter: 1 for alien shots, 5 for player shots
+  checkHit(point: THREE.Vector3, radius: number, damage: number = 1): ShieldHitResult {
     // Transform point to local space accounting for shield tilt
     const localPoint = point.clone().sub(this.position);
 
@@ -225,7 +226,7 @@ export class Shield {
     }
 
     if (closestVoxel) {
-      closestVoxel.health--;
+      closestVoxel.health -= damage;
       if (closestVoxel.health <= 0) {
         closestVoxel.alive = false;
       }

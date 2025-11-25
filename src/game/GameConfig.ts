@@ -8,7 +8,7 @@ export const GameConfig = {
   aliens: {
     columns: 11,
     rows: 5,
-    spacingX: 16,       // Horizontal spacing between aliens (tighter to fit field)
+    spacingX: 20,       // Horizontal spacing between aliens
     spacingZ: 36,       // Depth spacing between rows
     startDistance: 400, // Starting Z distance from player
     startHeight: 60,    // Y position (height above ground)

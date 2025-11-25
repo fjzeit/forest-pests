@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GameConfig } from '../game/GameConfig';
 import { AlienShotType } from './AlienFormation';
+import { Alien } from './Alien';
 
 export enum ProjectileType {
   PLAYER,
@@ -10,6 +11,7 @@ export enum ProjectileType {
 export class Projectile {
   public readonly type: ProjectileType;
   public readonly shotType: AlienShotType | 'straight';
+  public readonly sourceAlien: Alien | null;  // Track which alien fired this shot
 
   private mesh: THREE.Mesh;
   private velocity: THREE.Vector3;
@@ -20,8 +22,10 @@ export class Projectile {
     direction: THREE.Vector3,
     type: ProjectileType,
     shotType: AlienShotType | 'straight',
-    scene: THREE.Scene
+    scene: THREE.Scene,
+    sourceAlien: Alien | null = null  // Optional: alien that fired this shot
   ) {
+    this.sourceAlien = sourceAlien;
     this.type = type;
     this.shotType = shotType;
 

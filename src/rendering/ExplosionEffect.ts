@@ -270,24 +270,7 @@ export class ExplosionManager {
   createTurretExplosion(position: THREE.Vector3): void {
     const color = 0x888888; // Grey like the turret
 
-    // 1. Big white core flash
-    const flashGeometry = new THREE.SphereGeometry(8, 8, 8);
-    const flashMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 1.0,
-    });
-    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
-    flash.position.copy(position);
-    this.scene.add(flash);
-    this.particles.push({
-      mesh: flash,
-      velocity: new THREE.Vector3(0, 0, 0),
-      life: 0.15,
-      maxLife: 0.15,
-    });
-
-    // 2. Large grey debris pieces
+    // Large grey debris pieces
     const debrisCount = 30;
     for (let i = 0; i < debrisCount; i++) {
       const material = new THREE.MeshBasicMaterial({

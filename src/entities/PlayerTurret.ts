@@ -124,9 +124,9 @@ export class PlayerTurret {
     direction.applyQuaternion(this.camera.quaternion);
     direction.normalize();
 
-    // Start projectile slightly in front of camera
+    // Start projectile in front of camera to avoid muzzle flash
     const position = this.position.clone();
-    position.add(direction.clone().multiplyScalar(2));
+    position.add(direction.clone().multiplyScalar(5));
 
     return { position, direction };
   }

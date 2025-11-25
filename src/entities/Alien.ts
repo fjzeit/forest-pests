@@ -100,12 +100,27 @@ const ALIEN_COLORS: Record<AlienType, { r: number; g: number; b: number }> = {
   squid: { r: 255, g: 0, b: 128 },   // Hot pink/magenta (back rows)
 };
 
+// Dive bomber states
+export enum DiveState {
+  NONE,           // In formation
+  DIVING,         // Flying toward player
+  RETURNING,      // Flying back to formation
+}
+
 export class Alien {
   public alive: boolean = true;
   public readonly type: AlienType;
   public readonly points: number;
   public readonly gridX: number;
   public readonly gridY: number;
+
+  // Dive bomber properties
+  public diveState: DiveState = DiveState.NONE;
+  public diveProgress: number = 0;        // 0-1 progress through dive
+  public diveStartPos: THREE.Vector3 = new THREE.Vector3();
+  public formationPos: THREE.Vector3 = new THREE.Vector3();  // Position in formation to return to
+  public diveTargetX: number = 0;         // X position to strafe toward
+  public lastDiveShotTime: number = 0;    // For strafing shots
 
   private group: THREE.Group;
   private voxels: THREE.InstancedMesh[] = []; // One for each frame
@@ -260,5 +275,36 @@ export class Alien {
   // Get current color for explosion effects
   getCurrentColor(): number {
     return this.getColor(this.currentBrightness);
+  }
+
+  // Dive bomber methods
+  startDive(targetX: number, currentTime: number): void {
+    if (this.type !== 'squid' || this.diveState !== DiveState.NONE) return;
+
+    this.diveState = DiveState.DIVING;
+    this.diveProgress = 0;
+    this.diveStartPos.copy(this.group.position);
+    this.formationPos.copy(this.group.position);
+    this.diveTargetX = targetX;
+    this.lastDiveShotTime = currentTime;  // Initialize to current time so shots don't fire immediately
+
+    // Set to full brightness when diving
+    this.updateBrightness(0);
+  }
+
+  isDiving(): boolean {
+    return this.diveState !== DiveState.NONE;
+  }
+
+  // Get the group for rotation during dive
+  getGroup(): THREE.Group {
+    return this.group;
+  }
+
+  // Reset dive state (when killed or wave ends)
+  resetDive(): void {
+    this.diveState = DiveState.NONE;
+    this.diveProgress = 0;
+    this.group.rotation.set(0, 0, 0);
   }
 }

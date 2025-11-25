@@ -45,6 +45,7 @@ export class Game {
   private lastTime: number = 0;
   private waveCompleteDelayTimer: number = 0;
   private lifeLostDelayTimer: number = 0;
+  private gameTime: number = 0;  // Track game time for dive shots
 
   // UI Elements
   private scoreElement!: HTMLElement;
@@ -162,6 +163,7 @@ export class Game {
     this.lives = GameConfig.gameplay.lives;
     this.currentHealth = GameConfig.gameplay.hitsPerLife;
     this.wave = 1;
+    this.gameTime = 0;
 
     // Clear projectiles
     this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
@@ -233,6 +235,9 @@ export class Game {
   }
 
   private update(deltaTime: number): void {
+    // Track game time
+    this.gameTime += deltaTime;
+
     // Update input
     this.inputManager.update();
 
@@ -244,11 +249,14 @@ export class Game {
       this.firePlayerShot();
     }
 
-    // Update alien formation
-    const aliveCount = this.alienFormation.update(deltaTime);
+    // Get player position for dive targeting
+    const playerPos = this.player.getPosition();
+
+    // Update alien formation (pass player X and game time for dive targeting)
+    const aliveCount = this.alienFormation.update(deltaTime, playerPos.x, this.gameTime);
     this.audioManager.setMarchTempo(aliveCount);
 
-    // Aliens shoot back
+    // Aliens shoot back (formation shots)
     const alienShots = this.alienFormation.tryShoot();
     alienShots.forEach(shotData => {
       const projectile = new Projectile(
@@ -257,6 +265,21 @@ export class Game {
         ProjectileType.ALIEN,
         shotData.shotType,
         this.sceneManager.scene
+      );
+      this.projectiles.push(projectile);
+      this.audioManager.playAlienShoot();
+    });
+
+    // Dive bomber strafing shots
+    const diveShots = this.alienFormation.getDiveStrafeShots(this.gameTime);
+    diveShots.forEach(shotData => {
+      const projectile = new Projectile(
+        shotData.position,
+        shotData.direction,
+        ProjectileType.ALIEN,
+        shotData.shotType,
+        this.sceneManager.scene,
+        shotData.sourceAlien  // Track source alien for cleanup
       );
       this.projectiles.push(projectile);
       this.audioManager.playAlienShoot();
@@ -323,6 +346,7 @@ export class Game {
         this.audioManager.playAlienDeath();
         const alienColor = hit.alien.getCurrentColor();
         this.explosionManager.createAlienExplosion(hit.position, alienColor);
+
       });
       // Update brightness for remaining aliens
       this.alienFormation.updateAlienBrightness();
