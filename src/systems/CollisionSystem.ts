@@ -8,7 +8,7 @@ import { PlayerTurret } from '../entities/PlayerTurret';
 export interface CollisionResult {
   destroyedProjectiles: Projectile[];
   alienHits: { alien: Alien; points: number; position: THREE.Vector3 }[];
-  shieldHits: { shield: Shield; position: THREE.Vector3 }[];
+  shieldHits: { shield: Shield; position: THREE.Vector3; isPlayerShot: boolean }[];
   playerHit: boolean;
 }
 
@@ -67,13 +67,13 @@ export class CollisionSystem {
     }
 
     // Check against shields (player shots can damage shields from below)
-    // Player shots do 5x damage to shields
+    // Player shots do 50x damage to shields
     for (const shield of shields) {
       const boundingBox = shield.getBoundingBox();
       if (boundingBox.containsPoint(pos)) {
-        const hitResult = shield.checkHit(pos, sphere.radius, 5);
+        const hitResult = shield.checkHit(pos, sphere.radius, 50);
         if (hitResult.hit && hitResult.position) {
-          result.shieldHits.push({ shield, position: hitResult.position });
+          result.shieldHits.push({ shield, position: hitResult.position, isPlayerShot: true });
           result.destroyedProjectiles.push(projectile);
           return;
         }
@@ -95,7 +95,7 @@ export class CollisionSystem {
       if (boundingBox.containsPoint(pos)) {
         const hitResult = shield.checkHit(pos, sphere.radius);
         if (hitResult.hit && hitResult.position) {
-          result.shieldHits.push({ shield, position: hitResult.position });
+          result.shieldHits.push({ shield, position: hitResult.position, isPlayerShot: false });
           result.destroyedProjectiles.push(projectile);
           return;
         }

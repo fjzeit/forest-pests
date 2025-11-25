@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GameConfig } from '../game/GameConfig';
-import { Alien, AlienType, DiveState } from './Alien';
+import { Alien, AlienType, DiveState, FlyInState } from './Alien';
 
 export type AlienShotType = 'rolling' | 'plunger' | 'squiggly';
 
@@ -13,8 +13,8 @@ const DIVE_CONFIG = {
   waveFrequency: 3,         // How many wave cycles during dive
   diveShootIntervalBase: 1.0,   // Seconds between strafe shots (wave 2)
   diveShootIntervalLate: 0.4,   // Seconds between strafe shots (wave 75+)
-  minDiveInterval: 3,       // Minimum seconds between dive attacks (wave 1)
-  maxDiveInterval: 8,       // Maximum seconds between dive attacks (wave 1)
+  minDiveInterval: 3,       // Minimum seconds between dive attacks (wave 2)
+  maxDiveInterval: 8,       // Maximum seconds between dive attacks (wave 2)
   minDiveIntervalLate: 0.8, // Minimum seconds between dive attacks (wave 100)
   maxDiveIntervalLate: 2,   // Maximum seconds between dive attacks (wave 100)
   maxConcurrentDivers: 5,   // Maximum dive bombers at once
@@ -50,6 +50,10 @@ export class AlienFormation {
   private nextDiveTime: number = 5;  // First dive after 5 seconds
   private playerX: number = 0;       // Track player position for targeting
   private currentGameTime: number = 0;  // Track game time for dive shot timing
+
+  // Fly-in intro state
+  private introElapsedTime: number = 0;
+  private introActive: boolean = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -124,17 +128,19 @@ export class AlienFormation {
 
     this.aliens.forEach(alien => {
       if (!alien.alive) return;
-      // Skip aliens that are diving - they handle their own position
-      if (alien.isDiving()) return;
 
       const x = startX + alien.gridX * config.spacingX + this.formationX;
       // Row 0 is front (closest to player), so positive Z offset for higher rows
       const z = this.formationZ - alien.gridY * config.spacingZ;
       const y = this.formationY;
 
-      alien.setPosition(x, y, z);
-      // Store formation position for returning divers
+      // Always update formation position (for returning divers)
       alien.formationPos.set(x, y, z);
+
+      // Skip setting position for diving aliens - they handle their own position
+      if (alien.isDiving()) return;
+
+      alien.setPosition(x, y, z);
     });
   }
 
@@ -291,6 +297,10 @@ export class AlienFormation {
   }
 
   private tryStartDive(): void {
+    // Don't dive bomb if only squids are left - need other aliens to provide cover fire
+    const hasNonSquidAliens = this.aliens.some(a => a.alive && a.type !== 'squid');
+    if (!hasNonSquidAliens) return;
+
     // Count current divers
     const currentDivers = this.aliens.filter(a => a.alive && a.isDiving()).length;
 
@@ -336,39 +346,56 @@ export class AlienFormation {
     const pos = alien.getPosition();
 
     if (alien.diveState === DiveState.DIVING) {
-      // Calculate dive path
-      const startPos = alien.diveStartPos;
-      const targetZ = GameConfig.player.zPosition + 20; // Stop just past player
-      const totalDistance = startPos.z - targetZ;
-
-      // Update progress
-      alien.diveProgress += (DIVE_CONFIG.diveSpeed * deltaTime) / Math.abs(totalDistance);
-
-      // Calculate position along dive path
-      const t = alien.diveProgress;
-
-      // Z moves linearly toward player
-      const z = startPos.z + (targetZ - startPos.z) * t;
-
-      // Check if we should retreat (based on calculated Z, not current pos)
-      if (z >= DIVE_CONFIG.retreatZ) {
-        // Start returning when reaching retreat Z (well before shields)
+      // Safety check: if current position is already past retreat point, retreat immediately
+      if (pos.z >= DIVE_CONFIG.retreatZ) {
         alien.diveState = DiveState.RETURNING;
         alien.diveProgress = 0;
         alien.diveStartPos.copy(pos);
+        return;
+      }
+
+      // Calculate dive path
+      const startPos = alien.diveStartPos;
+      const targetZ = DIVE_CONFIG.retreatZ; // Target the retreat point, not past player
+      const totalDistance = Math.abs(startPos.z - targetZ);
+
+      // Safety: if no distance to travel, retreat
+      if (totalDistance < 1) {
+        alien.diveState = DiveState.RETURNING;
+        alien.diveProgress = 0;
+        alien.diveStartPos.copy(pos);
+        return;
+      }
+
+      // Update progress
+      alien.diveProgress += (DIVE_CONFIG.diveSpeed * deltaTime) / totalDistance;
+
+      // Calculate position along dive path
+      const t = Math.min(alien.diveProgress, 1); // Clamp to prevent overshoot
+
+      // Z moves linearly toward retreat point
+      const z = startPos.z + (targetZ - startPos.z) * t;
+
+      // Y: rise up, then swoop down (parabolic arc)
+      const heightCurve = Math.sin(t * Math.PI); // 0 -> 1 -> 0
+      const baseY = startPos.y + (10 - startPos.y) * t; // Descend toward ground level
+      const y = baseY + DIVE_CONFIG.heightBoost * heightCurve;
+
+      // X: wave motion toward target
+      const waveOffset = Math.sin(t * Math.PI * DIVE_CONFIG.waveFrequency) * DIVE_CONFIG.waveAmplitude * (1 - t);
+      const targetX = alien.diveTargetX;
+      const x = startPos.x + (targetX - startPos.x) * t + waveOffset;
+
+      // Set position
+      alien.setPosition(x, y, z);
+
+      // Check if we should retreat (reached end of dive or retreat Z)
+      if (t >= 1) {
+        // Start returning
+        alien.diveState = DiveState.RETURNING;
+        alien.diveProgress = 0;
+        alien.diveStartPos.set(x, y, z);
       } else {
-        // Y: rise up, then swoop down (parabolic arc)
-        const heightCurve = Math.sin(t * Math.PI); // 0 -> 1 -> 0
-        const baseY = startPos.y + (10 - startPos.y) * t; // Descend toward ground level
-        const y = baseY + DIVE_CONFIG.heightBoost * heightCurve;
-
-        // X: wave motion toward target
-        const waveOffset = Math.sin(t * Math.PI * DIVE_CONFIG.waveFrequency) * DIVE_CONFIG.waveAmplitude * (1 - t);
-        const targetX = alien.diveTargetX;
-        const x = startPos.x + (targetX - startPos.x) * t + waveOffset;
-
-        alien.setPosition(x, y, z);
-
         // Rotate to face direction of travel
         const group = alien.getGroup();
         const roll = Math.sin(t * Math.PI * DIVE_CONFIG.waveFrequency) * 0.5; // Bank during turns
@@ -463,8 +490,9 @@ export class AlienFormation {
   }
 
   hasReachedDangerZone(): boolean {
-    const frontAliens = this.aliens.filter(a => a.alive && a.gridY === 0);
-    return frontAliens.some(alien => {
+    // Check ALL alive aliens, not just front row (front row might be dead)
+    return this.aliens.some(alien => {
+      if (!alien.alive) return false;
       const pos = alien.getPosition();
       return pos.z > -GameConfig.gameplay.dangerDistance;
     });
@@ -519,5 +547,213 @@ export class AlienFormation {
       }
     }
     return null;
+  }
+
+  // Start the fly-in intro sequence
+  startIntro(): void {
+    this.introActive = true;
+    this.introElapsedTime = 0;
+
+    const config = GameConfig.aliens;
+    const totalWidth = (config.columns - 1) * config.spacingX;
+    const startX = -totalWidth / 2;
+
+    // Set up each alien with a random start position and staggered delay
+    this.aliens.forEach((alien, index) => {
+      // Calculate target formation position
+      const targetX = startX + alien.gridX * config.spacingX + this.formationX;
+      const targetZ = this.formationZ - alien.gridY * config.spacingZ;
+      const targetY = this.formationY;
+      const targetPos = new THREE.Vector3(targetX, targetY, targetZ);
+
+      // Random start position - mostly from above/back (coming from space)
+      const side = Math.random();
+      let startPos: THREE.Vector3;
+
+      if (side < 0.15) {
+        // From left (rare)
+        startPos = new THREE.Vector3(
+          -250 - Math.random() * 100,
+          120 + Math.random() * 80,
+          -500 - Math.random() * 150
+        );
+      } else if (side < 0.3) {
+        // From right (rare)
+        startPos = new THREE.Vector3(
+          250 + Math.random() * 100,
+          120 + Math.random() * 80,
+          -500 - Math.random() * 150
+        );
+      } else {
+        // From top/space (most common)
+        startPos = new THREE.Vector3(
+          (Math.random() - 0.5) * 400,
+          150 + Math.random() * 100,
+          -600 - Math.random() * 200
+        );
+      }
+
+      // Stagger delays - back rows come in first, front rows last
+      // Also add some randomness within each row
+      const rowDelay = (config.rows - 1 - alien.gridY) * 0.3;
+      const randomDelay = Math.random() * 0.4;
+      const delay = rowDelay + randomDelay;
+
+      alien.startFlyIn(startPos, targetPos, delay);
+    });
+  }
+
+  // Update the fly-in intro sequence
+  updateIntro(deltaTime: number): boolean {
+    if (!this.introActive) return true;
+
+    this.introElapsedTime += deltaTime;
+
+    let allArrived = true;
+    this.aliens.forEach(alien => {
+      if (!alien.updateFlyIn(deltaTime, this.introElapsedTime)) {
+        allArrived = false;
+      }
+    });
+
+    if (allArrived) {
+      this.introActive = false;
+      this.updateAlienBrightness();
+      return true;
+    }
+
+    return false;
+  }
+
+  isIntroActive(): boolean {
+    return this.introActive;
+  }
+
+  // Hide all aliens (for menu screen)
+  hideAll(): void {
+    this.aliens.forEach(alien => {
+      alien.getGroup().visible = false;
+    });
+  }
+
+  // Show all aliens
+  showAll(): void {
+    this.aliens.forEach(alien => {
+      alien.getGroup().visible = true;
+    });
+  }
+
+  // Landing sequence state
+  private landingActive: boolean = false;
+  private landingElapsedTime: number = 0;
+  private landingTargets: Map<Alien, { startPos: THREE.Vector3; targetPos: THREE.Vector3; delay: number }> = new Map();
+
+  // Start the invasion landing sequence
+  startLanding(): void {
+    this.landingActive = true;
+    this.landingElapsedTime = 0;
+    this.landingTargets.clear();
+
+    // Calculate landing positions - aliens spread out and land on the ground
+    const groundY = 0;
+    const landingZ = 50; // In front of where player was
+    const spreadX = 200; // Total width to spread across
+
+    const aliveAliens = this.aliens.filter(a => a.alive);
+    const count = aliveAliens.length;
+
+    aliveAliens.forEach((alien, index) => {
+      const currentPos = alien.getPosition();
+
+      // Spread aliens across the landing zone
+      const row = Math.floor(index / 8);
+      const col = index % 8;
+      const targetX = -spreadX / 2 + (col + 0.5) * (spreadX / 8) + (Math.random() - 0.5) * 10;
+      const targetZ = landingZ - row * 25 + (Math.random() - 0.5) * 10;
+
+      // Stagger the landing - front aliens land first
+      const delay = (currentPos.z + 400) / 200 * 0.5 + Math.random() * 0.3;
+
+      this.landingTargets.set(alien, {
+        startPos: currentPos.clone(),
+        targetPos: new THREE.Vector3(targetX, groundY + 5, targetZ),
+        delay: delay
+      });
+
+      // Reset any dive state
+      if (alien.isDiving()) {
+        alien.resetDive();
+      }
+    });
+  }
+
+  // Update landing animation - returns true when complete
+  updateLanding(deltaTime: number): boolean {
+    if (!this.landingActive) return true;
+
+    this.landingElapsedTime += deltaTime;
+
+    let allLanded = true;
+    const landingDuration = 2.0; // Seconds for each alien to land
+
+    this.landingTargets.forEach((target, alien) => {
+      if (!alien.alive) return;
+
+      const timeSinceStart = this.landingElapsedTime - target.delay;
+
+      if (timeSinceStart < 0) {
+        // Not started yet
+        allLanded = false;
+        return;
+      }
+
+      const progress = Math.min(timeSinceStart / landingDuration, 1);
+
+      if (progress < 1) {
+        allLanded = false;
+
+        // Swooping arc toward landing position
+        const t = progress;
+        const easeOut = 1 - Math.pow(1 - t, 3); // Ease out cubic
+
+        // Position interpolation with arc
+        const x = target.startPos.x + (target.targetPos.x - target.startPos.x) * easeOut;
+        const z = target.startPos.z + (target.targetPos.z - target.startPos.z) * easeOut;
+
+        // Y follows an arc - rise up first then descend
+        const arcHeight = 30;
+        const yArc = Math.sin(t * Math.PI) * arcHeight;
+        const baseY = target.startPos.y + (target.targetPos.y - target.startPos.y) * easeOut;
+        const y = baseY + yArc * (1 - t); // Arc diminishes as we land
+
+        alien.setPosition(x, y, z);
+
+        // Rotate to face forward and wobble during flight
+        const group = alien.getGroup();
+        const wobble = Math.sin(this.landingElapsedTime * 10 + target.delay * 5) * 0.2 * (1 - t);
+        const pitch = -0.3 * (1 - t); // Level out as landing
+        group.rotation.set(pitch, wobble, wobble * 0.5);
+
+        // Animate faster during descent
+        if (Math.random() < 0.15) alien.animate();
+      } else {
+        // Landed - set final position and level rotation
+        alien.setPosition(target.targetPos.x, target.targetPos.y, target.targetPos.z);
+        const group = alien.getGroup();
+        group.rotation.set(0, 0, 0);
+      }
+    });
+
+    // Add a small delay after all aliens land
+    if (allLanded && this.landingElapsedTime > 3.5) {
+      this.landingActive = false;
+      return true;
+    }
+
+    return false;
+  }
+
+  isLandingActive(): boolean {
+    return this.landingActive;
   }
 }

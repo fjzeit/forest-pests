@@ -226,9 +226,29 @@ export class Shield {
     }
 
     if (closestVoxel) {
-      closestVoxel.health -= damage;
-      if (closestVoxel.health <= 0) {
-        closestVoxel.alive = false;
+      // For high damage (player shots), destroy multiple voxels in a radius
+      if (damage > 1) {
+        const blastRadius = 2; // Destroy voxels in a 2-voxel radius
+        for (let dx = -blastRadius; dx <= blastRadius; dx++) {
+          for (let dy = -blastRadius; dy <= blastRadius; dy++) {
+            for (let dz = -blastRadius; dz <= blastRadius; dz++) {
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              if (dist <= blastRadius) {
+                const voxel = this.getVoxelAt(voxelX + dx, voxelY + dy, voxelZ + dz);
+                if (voxel && voxel.alive) {
+                  voxel.health = 0;
+                  voxel.alive = false;
+                }
+              }
+            }
+          }
+        }
+      } else {
+        // Alien shots - just damage the closest voxel
+        closestVoxel.health -= damage;
+        if (closestVoxel.health <= 0) {
+          closestVoxel.alive = false;
+        }
       }
       this.updateInstancedMesh();
       return { hit: true, position: hitPosition };

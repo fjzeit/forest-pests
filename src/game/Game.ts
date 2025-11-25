@@ -20,6 +20,8 @@ export enum GameState {
   WAVE_COMPLETE_DELAY,
   LIFE_LOST,
   LIFE_LOST_DELAY,
+  WAVE_INTRO,
+  INVASION_LANDING,
 }
 
 export class Game {
@@ -87,8 +89,9 @@ export class Game {
     // Initialize player
     this.player = new PlayerTurret(this.sceneManager.camera, this.sceneManager.scene);
 
-    // Initialize alien formation
+    // Initialize alien formation (hidden until game starts)
     this.alienFormation = new AlienFormation(this.sceneManager.scene);
+    this.alienFormation.hideAll();
 
     // Initialize shields
     this.createShields();
@@ -150,12 +153,14 @@ export class Game {
   }
 
   private startGame(): void {
-    this.state = GameState.PLAYING;
+    this.state = GameState.WAVE_INTRO;
     this.startPrompt.style.display = 'none';
     this.messageElement.style.display = 'none';
     this.crosshair.style.display = 'block';
     document.body.requestPointerLock();
-    this.audioManager.startMarch();
+    // Start the fly-in intro sequence
+    this.alienFormation.startIntro();
+    this.audioManager.startSaucerSound();
   }
 
   private resetGame(): void {
@@ -185,7 +190,7 @@ export class Game {
 
   private nextWave(): void {
     this.wave++;
-    this.state = GameState.PLAYING;
+    this.state = GameState.WAVE_INTRO;
     this.messageElement.style.display = 'none';
 
     // Clear remaining projectiles
@@ -200,7 +205,9 @@ export class Game {
     // Reset alien formation with increased difficulty
     this.alienFormation.reset(this.wave);
 
-    this.audioManager.startMarch();
+    // Start the fly-in intro sequence
+    this.alienFormation.startIntro();
+    this.audioManager.startSaucerSound();
     this.updateUI();
   }
 
@@ -213,6 +220,39 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       this.update(deltaTime);
+    } else if (this.state === GameState.WAVE_INTRO) {
+      // Update fly-in sequence - player can shoot during intro
+      this.inputManager.update();
+      this.player.update(deltaTime, this.inputManager);
+
+      // Allow player to shoot during intro
+      if (this.inputManager.isFiring() && this.player.canFire()) {
+        this.firePlayerShot();
+      }
+
+      // Update projectiles
+      this.projectiles = this.projectiles.filter(projectile => {
+        projectile.update(deltaTime);
+        if (projectile.isOutOfBounds()) {
+          projectile.destroy(this.sceneManager.scene);
+          return false;
+        }
+        return true;
+      });
+
+      // Check collisions (only player shots vs aliens during intro)
+      this.checkCollisions();
+
+      // Update explosions
+      this.explosionManager.update(deltaTime);
+
+      const introComplete = this.alienFormation.updateIntro(deltaTime);
+      if (introComplete) {
+        // Intro finished, start playing
+        this.state = GameState.PLAYING;
+        this.audioManager.stopSaucerSound();
+        this.audioManager.startMarch();
+      }
     } else if (this.state === GameState.WAVE_COMPLETE_DELAY) {
       // Continue updating explosions during delay
       this.explosionManager.update(deltaTime);
@@ -228,6 +268,14 @@ export class Game {
       // Wait for both timer and all explosions to finish
       if (this.lifeLostDelayTimer <= 0 && !this.explosionManager.hasActiveParticles()) {
         this.showLifeLost();
+      }
+    } else if (this.state === GameState.INVASION_LANDING) {
+      // Update the alien landing animation
+      const landingComplete = this.alienFormation.updateLanding(deltaTime);
+      this.explosionManager.update(deltaTime);
+
+      if (landingComplete) {
+        this.gameOver();
       }
     }
 
@@ -369,10 +417,17 @@ export class Game {
       }
     }
 
-    // Handle shield hits
+    // Handle shield hits - distinguish between player shots (turret) and alien shots
     result.shieldHits.forEach(hit => {
-      this.audioManager.playShieldHit();
-      this.explosionManager.createShieldImpact(hit.position);
+      if (hit.isPlayerShot) {
+        // Turret shot hitting shield - big spectacular explosion
+        this.audioManager.playTurretShieldHit();
+        this.explosionManager.createTurretShieldImpact(hit.position);
+      } else {
+        // Alien shot hitting shield - smaller impact
+        this.audioManager.playShieldHit();
+        this.explosionManager.createShieldImpact(hit.position);
+      }
     });
 
     this.updateUI();
@@ -385,16 +440,38 @@ export class Game {
       return;
     }
 
-    // Check if aliens reached danger zone
+    // Check if aliens reached danger zone - trigger landing sequence
     if (this.alienFormation.hasReachedDangerZone()) {
-      this.gameOver();
+      this.startInvasionLanding();
     }
+  }
+
+  private startInvasionLanding(): void {
+    this.state = GameState.INVASION_LANDING;
+    this.audioManager.stopMarch();
+    this.audioManager.startSaucerSound(); // Ominous UFO sound during landing
+
+    // Clear all projectiles
+    this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
+    this.projectiles = [];
+
+    // Explode the turret - player is overwhelmed
+    const turretPos = this.player.getTurretPosition();
+    this.explosionManager.createTurretExplosion(turretPos);
+    this.player.hideTurret();
+
+    // Start the alien landing animation
+    this.alienFormation.startLanding();
   }
 
   private startWaveCompleteDelay(): void {
     this.state = GameState.WAVE_COMPLETE_DELAY;
     this.audioManager.stopMarch();
     this.waveCompleteDelayTimer = 1.0; // 1 second delay for explosion to finish
+
+    // Clear all projectiles
+    this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
+    this.projectiles = [];
   }
 
   private showWaveComplete(): void {
@@ -449,9 +526,15 @@ export class Game {
   private gameOver(): void {
     this.state = GameState.GAME_OVER;
     this.audioManager.stopMarch();
+    this.audioManager.stopSaucerSound(); // Stop landing sound if playing
     this.audioManager.playGameOver();
     document.exitPointerLock();
     this.crosshair.style.display = 'none';
+
+    // Clear all projectiles
+    this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
+    this.projectiles = [];
+
     this.showMessage(`GAME OVER\nFINAL SCORE: ${this.score}\nPRESS SPACE TO RESTART`);
   }
 

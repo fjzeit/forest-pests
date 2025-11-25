@@ -107,6 +107,13 @@ export enum DiveState {
   RETURNING,      // Flying back to formation
 }
 
+// Fly-in states for wave intro
+export enum FlyInState {
+  WAITING,        // Not yet started flying in
+  FLYING,         // Flying toward formation position
+  ARRIVED,        // In formation position
+}
+
 export class Alien {
   public alive: boolean = true;
   public readonly type: AlienType;
@@ -121,6 +128,12 @@ export class Alien {
   public formationPos: THREE.Vector3 = new THREE.Vector3();  // Position in formation to return to
   public diveTargetX: number = 0;         // X position to strafe toward
   public lastDiveShotTime: number = 0;    // For strafing shots
+
+  // Fly-in properties for wave intro
+  public flyInState: FlyInState = FlyInState.ARRIVED;  // Default to arrived for normal gameplay
+  public flyInStartPos: THREE.Vector3 = new THREE.Vector3();
+  public flyInProgress: number = 0;
+  public flyInDelay: number = 0;          // Staggered start time
 
   private group: THREE.Group;
   private voxels: THREE.InstancedMesh[] = []; // One for each frame
@@ -306,5 +319,66 @@ export class Alien {
     this.diveState = DiveState.NONE;
     this.diveProgress = 0;
     this.group.rotation.set(0, 0, 0);
+  }
+
+  // Fly-in methods for wave intro
+  startFlyIn(startPos: THREE.Vector3, targetPos: THREE.Vector3, delay: number): void {
+    this.flyInState = FlyInState.WAITING;
+    this.flyInStartPos.copy(startPos);
+    this.formationPos.copy(targetPos);
+    this.flyInProgress = 0;
+    this.flyInDelay = delay;
+    this.setPosition(startPos.x, startPos.y, startPos.z);
+    this.group.visible = false;  // Hidden until fly-in starts
+  }
+
+  updateFlyIn(deltaTime: number, elapsedTime: number): boolean {
+    if (this.flyInState === FlyInState.ARRIVED) return true;
+
+    if (this.flyInState === FlyInState.WAITING) {
+      if (elapsedTime >= this.flyInDelay) {
+        this.flyInState = FlyInState.FLYING;
+        this.group.visible = true;
+      }
+      return false;
+    }
+
+    // Flying state
+    const flySpeed = 120;  // Units per second
+    const totalDistance = this.flyInStartPos.distanceTo(this.formationPos);
+    this.flyInProgress += (flySpeed * deltaTime) / totalDistance;
+
+    if (this.flyInProgress >= 1) {
+      // Arrived at formation
+      this.flyInState = FlyInState.ARRIVED;
+      this.flyInProgress = 1;
+      this.setPosition(this.formationPos.x, this.formationPos.y, this.formationPos.z);
+      this.group.rotation.set(0, 0, 0);
+      return true;
+    }
+
+    // Smooth ease-out interpolation
+    const t = 1 - Math.pow(1 - this.flyInProgress, 2);
+
+    const x = this.flyInStartPos.x + (this.formationPos.x - this.flyInStartPos.x) * t;
+    const y = this.flyInStartPos.y + (this.formationPos.y - this.flyInStartPos.y) * t;
+    const z = this.flyInStartPos.z + (this.formationPos.z - this.flyInStartPos.z) * t;
+
+    this.setPosition(x, y, z);
+
+    // Rotate to face direction of travel
+    const dx = this.formationPos.x - x;
+    const dz = this.formationPos.z - z;
+    const roll = Math.atan2(dx, Math.abs(dz)) * 0.5;
+    this.group.rotation.set(0, 0, roll);
+
+    // Animate during flight
+    if (Math.random() < 0.15) this.animate();
+
+    return false;
+  }
+
+  isFlyingIn(): boolean {
+    return this.flyInState !== FlyInState.ARRIVED;
   }
 }

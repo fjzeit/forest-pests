@@ -158,8 +158,46 @@ export class AudioManager {
   // Disabled - too noisy
   playPlayerHit(): void {}
 
-  // Disabled - too noisy
+  // Disabled - too noisy (alien shots)
   playShieldHit(): void {}
+
+  // Turret shot hitting shield - big crunch sound
+  playTurretShieldHit(): void {
+    if (!this.audioContext) return;
+
+    const duration = 0.2;
+
+    // Create noise buffer for crunch
+    const bufferSize = this.audioContext.sampleRate * duration;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    // Fill with noise that rapidly decays
+    for (let i = 0; i < bufferSize; i++) {
+      const decay = Math.pow(1 - (i / bufferSize), 2);
+      data[i] = (Math.random() * 2 - 1) * decay;
+    }
+
+    const noise = this.audioContext.createBufferSource();
+    noise.buffer = buffer;
+
+    // Band-pass filter for crunchier sound
+    const filter = this.audioContext.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(800, this.audioContext.currentTime);
+    filter.Q.setValueAtTime(1, this.audioContext.currentTime);
+
+    const gainNode = this.audioContext.createGain();
+    gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+    noise.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(this.audioContext.destination);
+
+    noise.start();
+    noise.stop(this.audioContext.currentTime + duration);
+  }
 
   playWaveComplete(): void {
     // Triumphant ascending tones
@@ -175,5 +213,56 @@ export class AudioManager {
     setTimeout(() => this.playTone(330, 0.2, 'square', 0.2), 200);
     setTimeout(() => this.playTone(262, 0.2, 'square', 0.2), 400);
     setTimeout(() => this.playTone(196, 0.4, 'square', 0.2), 600);
+  }
+
+  // Flying saucer sound for wave intro
+  private saucerOscillator: OscillatorNode | null = null;
+  private saucerGain: GainNode | null = null;
+
+  startSaucerSound(): void {
+    if (!this.audioContext) return;
+    this.stopSaucerSound();
+
+    // Create warbling UFO sound
+    this.saucerOscillator = this.audioContext.createOscillator();
+    const lfo = this.audioContext.createOscillator();
+    const lfoGain = this.audioContext.createGain();
+    this.saucerGain = this.audioContext.createGain();
+
+    // Main oscillator - sine wave for smooth UFO sound
+    this.saucerOscillator.type = 'sine';
+    this.saucerOscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
+
+    // LFO to modulate the frequency (creates warble)
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(8, this.audioContext.currentTime); // Warble speed
+    lfoGain.gain.setValueAtTime(50, this.audioContext.currentTime); // Warble depth
+
+    // Connect LFO to main oscillator frequency
+    lfo.connect(lfoGain);
+    lfoGain.connect(this.saucerOscillator.frequency);
+
+    // Volume
+    this.saucerGain.gain.setValueAtTime(0.12, this.audioContext.currentTime);
+
+    // Connect to output
+    this.saucerOscillator.connect(this.saucerGain);
+    this.saucerGain.connect(this.audioContext.destination);
+
+    // Start
+    lfo.start();
+    this.saucerOscillator.start();
+  }
+
+  stopSaucerSound(): void {
+    if (this.saucerOscillator) {
+      try {
+        this.saucerOscillator.stop();
+      } catch (e) {}
+      this.saucerOscillator = null;
+    }
+    if (this.saucerGain) {
+      this.saucerGain = null;
+    }
   }
 }

@@ -93,7 +93,115 @@ export class ExplosionManager {
         ),
       });
     }
+  }
 
+  // Big explosion for turret shots hitting shields
+  createTurretShieldImpact(position: THREE.Vector3): void {
+    const color = 0x0088ff;
+
+    // White flash
+    const flashGeometry = new THREE.SphereGeometry(4, 8, 8);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(position);
+    this.scene.add(flash);
+    this.particles.push({
+      mesh: flash,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 0.1,
+      maxLife: 0.1,
+    });
+
+    // Blue glow sphere
+    const glowGeometry = new THREE.SphereGeometry(3, 12, 12);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.7,
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    glow.position.copy(position);
+    this.scene.add(glow);
+    this.particles.push({
+      mesh: glow,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 0.3,
+      maxLife: 0.3,
+    });
+
+    // Lots of voxel debris
+    const debrisCount = 25;
+    for (let i = 0; i < debrisCount; i++) {
+      const material = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+      });
+
+      const mesh = new THREE.Mesh(this.debrisGeometry.clone(), material);
+      mesh.position.copy(position);
+      mesh.scale.setScalar(0.8 + Math.random() * 1.2);
+
+      // Debris flies outward in all directions
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      const speed = 25 + Math.random() * 40;
+      const velocity = new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.abs(Math.sin(phi) * Math.sin(theta)) * speed + 10, // Bias upward
+        Math.cos(phi) * speed
+      );
+
+      const life = 0.5 + Math.random() * 0.4;
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        velocity,
+        life,
+        maxLife: life,
+        rotationSpeed: new THREE.Vector3(
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20
+        ),
+      });
+    }
+
+    // Spark lines
+    const lineCount = 8;
+    for (let i = 0; i < lineCount; i++) {
+      const lineMaterial = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 1.0,
+      });
+
+      const theta = (i / lineCount) * Math.PI * 2;
+      const length = 6 + Math.random() * 4;
+      const points = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(
+          Math.cos(theta) * length,
+          (Math.random() - 0.3) * length,
+          Math.sin(theta) * length
+        ),
+      ];
+      const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(lineGeometry, lineMaterial);
+      line.position.copy(position);
+      this.scene.add(line);
+
+      const life = 0.2 + Math.random() * 0.15;
+      this.particles.push({
+        mesh: line,
+        velocity: new THREE.Vector3(0, 0, 0),
+        life,
+        maxLife: life,
+      });
+    }
   }
 
   createAlienExplosion(position: THREE.Vector3, color: number = 0x00ff00): void {
