@@ -351,6 +351,9 @@ export class Game {
     // Update explosions
     this.explosionManager.update(deltaTime);
 
+    // Update shields (shimmer effect)
+    this.shields.forEach(shield => shield.update(deltaTime));
+
     // Check win/lose conditions
     this.checkGameConditions();
   }

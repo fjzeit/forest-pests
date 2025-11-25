@@ -92,8 +92,30 @@ export class AudioManager {
     this.currentTempo = minTempo + (maxTempo - minTempo) * ratio;
   }
 
-  // Disabled - too noisy
-  playPlayerShoot(): void {}
+  // Quiet turret fire - short laser zap
+  playPlayerShoot(): void {
+    if (!this.audioContext) return;
+
+    const duration = 0.08;
+
+    // Quick descending tone for laser effect
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + duration);
+
+    // Very quiet
+    gainNode.gain.setValueAtTime(0.08, this.audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(this.audioContext.destination);
+
+    oscillator.start();
+    oscillator.stop(this.audioContext.currentTime + duration);
+  }
 
   // Disabled - too noisy
   playAlienShoot(): void {}

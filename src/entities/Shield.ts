@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { GameConfig } from '../game/GameConfig';
 
-interface Voxel {
+interface HexCell {
   x: number;
   y: number;
-  z: number;
+  worldX: number;
+  worldY: number;
+  worldZ: number;
   health: number;
   maxHealth: number;
   instanceId: number;
   alive: boolean;
+  phase: number; // For shimmer animation
 }
 
 export interface ShieldHitResult {
@@ -16,238 +19,234 @@ export interface ShieldHitResult {
   position: THREE.Vector3 | null;
 }
 
+// Create hexagon shape
+function createHexagonGeometry(radius: number, depth: number): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 - Math.PI / 6;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (i === 0) {
+      shape.moveTo(x, y);
+    } else {
+      shape.lineTo(x, y);
+    }
+  }
+  shape.closePath();
+
+  const extrudeSettings = {
+    depth: depth,
+    bevelEnabled: false,
+  };
+
+  return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+}
+
 export class Shield {
-  private voxels: Voxel[] = [];
+  private cells: HexCell[] = [];
   private instancedMesh: THREE.InstancedMesh;
+  private edgeMesh: THREE.InstancedMesh; // Glowing edges
   private position: THREE.Vector3;
-  private voxelSize: number;
   private width: number;
   private height: number;
   private depth: number;
   private dummy: THREE.Object3D = new THREE.Object3D();
-  private tiltAngle: number = 0.4; // Tilt angle in radians (~23 degrees) - tilted back to face incoming fire
+  private cellHealth: number;
+  private time: number = 0;
 
-  private voxelHealth: number;
+  private hexRadius: number = 3; // Size of each hexagon
+  private hexDepth: number = 2; // Thicker energy field
 
-  constructor(position: THREE.Vector3, scene: THREE.Scene, voxelHealth: number = 3) {
+  constructor(position: THREE.Vector3, scene: THREE.Scene, cellHealth: number = 3) {
     this.position = position;
-    this.voxelSize = GameConfig.shields.voxelSize;
     this.width = GameConfig.shields.width;
     this.height = GameConfig.shields.height;
     this.depth = GameConfig.shields.depth;
-    this.voxelHealth = voxelHealth;
+    this.cellHealth = cellHealth;
 
-    // Create instanced mesh for efficient rendering
-    const voxelGeometry = new THREE.BoxGeometry(
-      this.voxelSize,
-      this.voxelSize,
-      this.voxelSize
-    );
+    // Create hexagon geometry for energy cells - vertical wall facing player
+    const hexGeometry = createHexagonGeometry(this.hexRadius * 0.9, this.hexDepth);
+    // No rotation needed - hexagon is in XY plane, extrusion goes in Z (toward player)
 
-    // Use a bright emissive material for visibility
-    const voxelMaterial = new THREE.MeshBasicMaterial({
+    // Glowing energy field material
+    const cellMaterial = new THREE.MeshBasicMaterial({
       color: 0x0088ff,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
     });
 
-    // Calculate max voxels
-    const maxVoxels = Math.ceil(this.width / this.voxelSize) *
-                      Math.ceil(this.height / this.voxelSize) *
-                      Math.ceil(this.depth / this.voxelSize);
+    // Edge geometry - slightly larger hexagon outline
+    const edgeGeometry = createHexagonGeometry(this.hexRadius, this.hexDepth * 0.5);
+    // No rotation needed
 
-    this.instancedMesh = new THREE.InstancedMesh(
-      voxelGeometry,
-      voxelMaterial,
-      maxVoxels
-    );
+    const edgeMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.8,
+      wireframe: true,
+    });
 
-    // Enable per-instance color for density visualization
+    // Calculate hex grid
+    const cols = Math.ceil(this.width / (this.hexRadius * 1.8)) + 1;
+    const rows = Math.ceil(this.height / (this.hexRadius * 1.6)) + 1;
+    const maxCells = cols * rows;
+
+    this.instancedMesh = new THREE.InstancedMesh(hexGeometry, cellMaterial, maxCells);
+    this.edgeMesh = new THREE.InstancedMesh(edgeGeometry, edgeMaterial, maxCells);
+
     this.instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(
-      new Float32Array(maxVoxels * 3),
+      new Float32Array(maxCells * 3),
       3
     );
 
     scene.add(this.instancedMesh);
+    scene.add(this.edgeMesh);
 
-    // Create shield shape (simple rectangular wall)
-    this.createShieldShape();
+    this.createHexGrid();
     this.updateInstancedMesh();
   }
 
-  private createShieldShape(): void {
-    const voxelsX = Math.ceil(this.width / this.voxelSize);
-    const voxelsY = Math.ceil(this.height / this.voxelSize);
-    const voxelsZ = Math.ceil(this.depth / this.voxelSize);
+  private createHexGrid(): void {
+    const hexWidth = this.hexRadius * 1.8;  // Horizontal spacing
+    const hexHeight = this.hexRadius * 1.6; // Vertical spacing
+
+    const cols = Math.ceil(this.width / hexWidth) + 1;
+    const rows = Math.ceil(this.height / hexHeight) + 1;
 
     let instanceId = 0;
-    const maxHealth = this.voxelHealth;
 
-    // Simple rectangular shape - no cutouts
-    for (let x = 0; x < voxelsX; x++) {
-      for (let y = 0; y < voxelsY; y++) {
-        for (let z = 0; z < voxelsZ; z++) {
-          this.voxels.push({
-            x,
-            y,
-            z,
-            health: maxHealth,
-            maxHealth: maxHealth,
-            instanceId: instanceId++,
-            alive: true
-          });
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        // Offset every other row for hex pattern
+        const xOffset = (row % 2) * (hexWidth / 2);
+        const localX = -this.width / 2 + col * hexWidth + xOffset;
+        const localY = row * hexHeight;
+
+        // Skip if outside shield bounds
+        if (localX < -this.width / 2 - this.hexRadius ||
+            localX > this.width / 2 + this.hexRadius ||
+            localY > this.height + this.hexRadius) {
+          continue;
         }
+
+        // Vertical wall - no tilt, just offset slightly back in Z
+        this.cells.push({
+          x: col,
+          y: row,
+          worldX: this.position.x + localX,
+          worldY: this.position.y + localY,
+          worldZ: this.position.z,
+          health: this.cellHealth,
+          maxHealth: this.cellHealth,
+          instanceId: instanceId++,
+          alive: true,
+          phase: Math.random() * Math.PI * 2, // Random phase for shimmer
+        });
       }
     }
   }
 
   private updateInstancedMesh(): void {
-    const offsetX = -this.width / 2;
-    const offsetY = 0;
-    const offsetZ = -this.depth / 2;
-
     // Hide all instances first
     for (let i = 0; i < this.instancedMesh.count; i++) {
-      this.dummy.position.set(0, -1000, 0); // Move off-screen
+      this.dummy.position.set(0, -1000, 0);
       this.dummy.updateMatrix();
       this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+      this.edgeMesh.setMatrixAt(i, this.dummy.matrix);
     }
 
-    // Position alive voxels with tilt
-    this.voxels.forEach(voxel => {
-      if (!voxel.alive || voxel.health <= 0) {
-        voxel.alive = false;
+    // Position alive cells
+    this.cells.forEach(cell => {
+      if (!cell.alive || cell.health <= 0) {
+        cell.alive = false;
         return;
       }
 
-      // Calculate local position
-      const localX = offsetX + voxel.x * this.voxelSize;
-      const localY = offsetY + voxel.y * this.voxelSize;
-      const localZ = offsetZ + voxel.z * this.voxelSize;
-
-      // Apply tilt rotation around X axis (lean back toward aliens)
-      const tiltedY = localY * Math.cos(this.tiltAngle) - localZ * Math.sin(this.tiltAngle);
-      const tiltedZ = localY * Math.sin(this.tiltAngle) + localZ * Math.cos(this.tiltAngle);
-
-      const worldX = this.position.x + localX;
-      const worldY = this.position.y + tiltedY;
-      const worldZ = this.position.z + tiltedZ;
-
-      this.dummy.position.set(worldX, worldY, worldZ);
-      this.dummy.rotation.set(this.tiltAngle, 0, 0);
+      this.dummy.position.set(cell.worldX, cell.worldY, cell.worldZ);
+      // No rotation - hexagons are in XY plane, facing player (extruded in Z)
+      this.dummy.rotation.set(0, 0, 0);
       this.dummy.updateMatrix();
-      this.instancedMesh.setMatrixAt(voxel.instanceId, this.dummy.matrix);
+      this.instancedMesh.setMatrixAt(cell.instanceId, this.dummy.matrix);
+      this.edgeMesh.setMatrixAt(cell.instanceId, this.dummy.matrix);
 
-      // Update color based on health (blue -> cyan -> dark blue)
-      const healthRatio = voxel.health / voxel.maxHealth;
+      // Color based on health - more vibrant when healthy
+      const healthRatio = cell.health / cell.maxHealth;
       const color = new THREE.Color();
+
       if (healthRatio > 0.6) {
-        color.setRGB(0, 0.53, 1); // Blue - healthy
+        color.setRGB(0, 0.6, 1); // Bright blue
       } else if (healthRatio > 0.3) {
-        color.setRGB(0, 0.8, 1); // Cyan - damaged
+        color.setRGB(0, 0.9, 1); // Cyan - damaged
       } else {
-        color.setRGB(0.2, 0.2, 0.8); // Dark blue - critical
+        color.setRGB(0.5, 0.2, 1); // Purple - critical
       }
-      this.instancedMesh.setColorAt(voxel.instanceId, color);
+
+      this.instancedMesh.setColorAt(cell.instanceId, color);
     });
 
     this.instancedMesh.instanceMatrix.needsUpdate = true;
+    this.edgeMesh.instanceMatrix.needsUpdate = true;
     if (this.instancedMesh.instanceColor) {
       this.instancedMesh.instanceColor.needsUpdate = true;
     }
   }
 
+  // Call this from game loop for shimmer effect
+  update(deltaTime: number): void {
+    this.time += deltaTime;
+
+    // Update opacity for shimmer effect
+    const baseMaterial = this.instancedMesh.material as THREE.MeshBasicMaterial;
+    const shimmer = 0.3 + Math.sin(this.time * 3) * 0.1;
+    baseMaterial.opacity = shimmer;
+
+    const edgeMaterial = this.edgeMesh.material as THREE.MeshBasicMaterial;
+    const edgeShimmer = 0.6 + Math.sin(this.time * 4) * 0.2;
+    edgeMaterial.opacity = edgeShimmer;
+  }
+
   // Check if a point hits the shield and damage it - returns hit info for explosion
-  // damage parameter: 1 for alien shots, 5 for player shots
+  // damage parameter: 1 for alien shots, 50 for player shots
   checkHit(point: THREE.Vector3, radius: number, damage: number = 1): ShieldHitResult {
-    // Transform point to local space accounting for shield tilt
-    const localPoint = point.clone().sub(this.position);
-
-    // Inverse tilt rotation to get to untilted local space
-    const untiltedY = localPoint.y * Math.cos(-this.tiltAngle) - localPoint.z * Math.sin(-this.tiltAngle);
-    const untiltedZ = localPoint.y * Math.sin(-this.tiltAngle) + localPoint.z * Math.cos(-this.tiltAngle);
-
-    // Convert to voxel grid coordinates
-    const localX = localPoint.x + this.width / 2;
-    const localY = untiltedY;
-    const localZ = untiltedZ + this.depth / 2;
-
-    const voxelX = Math.floor(localX / this.voxelSize);
-    const voxelY = Math.floor(localY / this.voxelSize);
-    const voxelZ = Math.floor(localZ / this.voxelSize);
-
-    // Find the closest alive voxel to damage
-    let closestVoxel: Voxel | null = null;
+    // Find closest alive hex cell to the hit point
+    let closestCell: HexCell | null = null;
     let closestDist = Infinity;
     let hitPosition: THREE.Vector3 | null = null;
 
-    // Search radius in voxels
-    const searchRadius = 2;
+    const hitThreshold = this.hexRadius * 1.5 + radius;
 
-    for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-      for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-        for (let dz = -searchRadius; dz <= searchRadius; dz++) {
-          const voxel = this.getVoxelAt(voxelX + dx, voxelY + dy, voxelZ + dz);
-          if (voxel && voxel.alive && voxel.health > 0) {
-            // Calculate distance to voxel center
-            const voxelCenterX = (voxelX + dx + 0.5) * this.voxelSize;
-            const voxelCenterY = (voxelY + dy + 0.5) * this.voxelSize;
-            const voxelCenterZ = (voxelZ + dz + 0.5) * this.voxelSize;
+    for (const cell of this.cells) {
+      if (!cell.alive || cell.health <= 0) continue;
 
-            const dist = Math.sqrt(
-              Math.pow(localX - voxelCenterX, 2) +
-              Math.pow(localY - voxelCenterY, 2) +
-              Math.pow(localZ - voxelCenterZ, 2)
-            );
+      const cellPos = new THREE.Vector3(cell.worldX, cell.worldY, cell.worldZ);
+      const dist = point.distanceTo(cellPos);
 
-            // Check if within hit radius
-            const hitThreshold = radius + this.voxelSize * 1.5;
-            if (dist < hitThreshold && dist < closestDist) {
-              closestDist = dist;
-              closestVoxel = voxel;
-
-              // Calculate world position for explosion effect
-              const voxelLocalX = -this.width / 2 + voxelCenterX;
-              const voxelLocalY = voxelCenterY;
-              const voxelLocalZ = -this.depth / 2 + voxelCenterZ;
-
-              const tiltedY = voxelLocalY * Math.cos(this.tiltAngle) - voxelLocalZ * Math.sin(this.tiltAngle);
-              const tiltedZ = voxelLocalY * Math.sin(this.tiltAngle) + voxelLocalZ * Math.cos(this.tiltAngle);
-
-              hitPosition = new THREE.Vector3(
-                this.position.x + voxelLocalX,
-                this.position.y + tiltedY,
-                this.position.z + tiltedZ
-              );
-            }
-          }
-        }
+      if (dist < hitThreshold && dist < closestDist) {
+        closestDist = dist;
+        closestCell = cell;
+        hitPosition = cellPos.clone();
       }
     }
 
-    if (closestVoxel) {
-      // For high damage (player shots), destroy multiple voxels in a radius
+    if (closestCell) {
+      // For high damage (player shots), destroy multiple cells in a radius
       if (damage > 1) {
-        const blastRadius = 2; // Destroy voxels in a 2-voxel radius
-        for (let dx = -blastRadius; dx <= blastRadius; dx++) {
-          for (let dy = -blastRadius; dy <= blastRadius; dy++) {
-            for (let dz = -blastRadius; dz <= blastRadius; dz++) {
-              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-              if (dist <= blastRadius) {
-                const voxel = this.getVoxelAt(voxelX + dx, voxelY + dy, voxelZ + dz);
-                if (voxel && voxel.alive) {
-                  voxel.health = 0;
-                  voxel.alive = false;
-                }
-              }
-            }
+        const blastRadius = this.hexRadius * GameConfig.shields.playerDamageRadius;
+        for (const cell of this.cells) {
+          if (!cell.alive) continue;
+          const cellPos = new THREE.Vector3(cell.worldX, cell.worldY, cell.worldZ);
+          const dist = hitPosition!.distanceTo(cellPos);
+          if (dist <= blastRadius) {
+            cell.health = 0;
+            cell.alive = false;
           }
         }
       } else {
-        // Alien shots - just damage the closest voxel
-        closestVoxel.health -= damage;
-        if (closestVoxel.health <= 0) {
-          closestVoxel.alive = false;
+        // Alien shots - just damage the closest cell
+        closestCell.health -= damage;
+        if (closestCell.health <= 0) {
+          closestCell.alive = false;
         }
       }
       this.updateInstancedMesh();
@@ -257,36 +256,37 @@ export class Shield {
     return { hit: false, position: null };
   }
 
-  private getVoxelAt(x: number, y: number, z: number): Voxel | undefined {
-    return this.voxels.find(v => v.x === x && v.y === y && v.z === z);
-  }
-
-  // Get bounding box for quick collision pre-check (expanded to account for tilt)
+  // Get bounding box for quick collision pre-check
   getBoundingBox(): THREE.Box3 {
-    const expandedHeight = this.height * 1.5; // Account for tilted shield
-    const expandedDepth = this.depth + this.height * Math.sin(Math.abs(this.tiltAngle));
-
     return new THREE.Box3(
       new THREE.Vector3(
-        this.position.x - this.width / 2 - this.voxelSize * 2,
-        this.position.y - this.voxelSize * 2,
-        this.position.z - expandedDepth - this.voxelSize * 2
+        this.position.x - this.width / 2 - this.hexRadius * 2,
+        this.position.y - this.hexRadius * 2,
+        this.position.z - this.hexDepth - this.hexRadius * 2
       ),
       new THREE.Vector3(
-        this.position.x + this.width / 2 + this.voxelSize * 2,
-        this.position.y + expandedHeight + this.voxelSize * 2,
-        this.position.z + this.depth / 2 + this.voxelSize * 2
+        this.position.x + this.width / 2 + this.hexRadius * 2,
+        this.position.y + this.height + this.hexRadius * 2,
+        this.position.z + this.hexDepth + this.hexRadius * 2
       )
     );
   }
 
+  hasAliveCells(): boolean {
+    return this.cells.some(c => c.alive && c.health > 0);
+  }
+
+  // Keep old method name for compatibility
   hasAliveVoxels(): boolean {
-    return this.voxels.some(v => v.alive && v.health > 0);
+    return this.hasAliveCells();
   }
 
   destroy(scene: THREE.Scene): void {
     scene.remove(this.instancedMesh);
+    scene.remove(this.edgeMesh);
     this.instancedMesh.geometry.dispose();
+    this.edgeMesh.geometry.dispose();
     (this.instancedMesh.material as THREE.Material).dispose();
+    (this.edgeMesh.material as THREE.Material).dispose();
   }
 }

@@ -51,14 +51,15 @@ export const GameConfig = {
 
   // Shields
   shields: {
-    count: 4,
-    width: 24,
-    height: 30,     // Taller to block all incoming shots
+    count: 1,              // One long shield
+    width: 200,            // Wide enough to span the field
+    height: 30,            // Taller to block all incoming shots
     depth: 6,
-    distance: 100,  // Z distance from player
-    height_y: 0,    // Start at ground level
-    spacing: 50,    // Horizontal spacing between shields
+    distance: 100,         // Z distance from player
+    height_y: 0,           // Start at ground level
+    spacing: 0,            // Not used with single shield
     voxelSize: 2,
+    playerDamageRadius: 1, // Smaller radius for player shots hitting shield
   },
 
   // Gameplay

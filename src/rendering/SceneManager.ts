@@ -37,17 +37,22 @@ export class SceneManager {
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.container.insertBefore(this.renderer.domElement, this.container.firstChild);
 
-    // Add ambient light
-    const ambientLight = new THREE.AmbientLight(0x004400, 0.5);
+    // Add ambient light - brighter base illumination
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     this.scene.add(ambientLight);
 
-    // Add directional light (simulates stars/sky illumination)
-    const directionalLight = new THREE.DirectionalLight(0x00ff00, 0.8);
-    directionalLight.position.set(0, 100, -100);
-    this.scene.add(directionalLight);
+    // Main directional light from above-front for good shading on aliens
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    mainLight.position.set(0, 100, 100); // From player's perspective
+    this.scene.add(mainLight);
 
-    // Create vector grid ground
-    this.createVectorGround();
+    // Rim light from behind to highlight edges
+    const rimLight = new THREE.DirectionalLight(0x4488ff, 0.4);
+    rimLight.position.set(0, 50, -200);
+    this.scene.add(rimLight);
+
+    // Create forest ground
+    this.createForestGround();
 
     // Create star field background
     this.createStarField();
@@ -56,67 +61,77 @@ export class SceneManager {
     window.addEventListener('resize', () => this.onWindowResize());
   }
 
-  private createVectorGround(): void {
-    const gridSize = 500;
-    const gridDivisions = 25;
-    const gridSpacing = gridSize / gridDivisions;
+  private createForestGround(): void {
+    // Create simple tree silhouette (tall shapes visible against sky)
+    const createTree = (x: number, z: number, height: number) => {
+      const group = new THREE.Group();
 
-    // Create grid lines
-    const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0x004400,
-      transparent: true,
-      opacity: 0.6
-    });
+      // Trunk - brighter brown
+      const trunkGeometry = new THREE.BoxGeometry(3, height * 0.4, 3);
+      const trunkMaterial = new THREE.MeshBasicMaterial({ color: 0x664433 });
+      const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+      trunk.position.y = height * 0.2;
+      group.add(trunk);
 
-    // Lines along X axis (going into the distance)
-    for (let i = -gridDivisions / 2; i <= gridDivisions / 2; i++) {
-      const points = [
-        new THREE.Vector3(i * gridSpacing, 0, gridSize / 2),
-        new THREE.Vector3(i * gridSpacing, 0, -gridSize / 2)
-      ];
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const line = new THREE.Line(geometry, lineMaterial);
-      this.scene.add(line);
+      // Foliage - brighter green
+      const foliageMaterial = new THREE.MeshBasicMaterial({ color: 0x2a8a3a });
+
+      const cone1 = new THREE.Mesh(
+        new THREE.ConeGeometry(height * 0.3, height * 0.5, 6),
+        foliageMaterial
+      );
+      cone1.position.y = height * 0.55;
+      group.add(cone1);
+
+      const cone2 = new THREE.Mesh(
+        new THREE.ConeGeometry(height * 0.25, height * 0.4, 6),
+        foliageMaterial
+      );
+      cone2.position.y = height * 0.8;
+      group.add(cone2);
+
+      const cone3 = new THREE.Mesh(
+        new THREE.ConeGeometry(height * 0.15, height * 0.3, 6),
+        foliageMaterial
+      );
+      cone3.position.y = height;
+      group.add(cone3);
+
+      group.position.set(x, 0, z);
+      return group;
+    };
+
+    // Create forest treeline at the horizon and sides
+    // Trees need to be tall enough to be visible (camera looks up at ~30 degrees)
+
+    // Back treeline (horizon) - very tall trees, pushed much further back
+    for (let i = 0; i < 100; i++) {
+      const x = -500 + i * 10 + Math.random() * 5;
+      const z = -750 - Math.random() * 100;  // Much further back
+      const height = 140 + Math.random() * 80;  // Taller trees
+      const tree = createTree(x, z, height);
+      this.scene.add(tree);
     }
 
-    // Lines along Z axis (side to side)
-    for (let i = -gridDivisions / 2; i <= gridDivisions / 2; i++) {
-      const points = [
-        new THREE.Vector3(-gridSize / 2, 0, i * gridSpacing),
-        new THREE.Vector3(gridSize / 2, 0, i * gridSpacing)
-      ];
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const line = new THREE.Line(geometry, lineMaterial);
-      this.scene.add(line);
+    // Left side treeline
+    for (let i = 0; i < 40; i++) {
+      const z = -50 - i * 18 - Math.random() * 10;
+      const x = -150 - Math.random() * 50;
+      const height = 60 + Math.random() * 40;
+      const tree = createTree(x, z, height);
+      this.scene.add(tree);
     }
 
-    // Add field boundary lines (brighter)
-    const boundaryMaterial = new THREE.LineBasicMaterial({
-      color: 0x00ff00,
-      transparent: true,
-      opacity: 0.4
-    });
+    // Right side treeline
+    for (let i = 0; i < 40; i++) {
+      const z = -50 - i * 18 - Math.random() * 10;
+      const x = 150 + Math.random() * 50;
+      const height = 60 + Math.random() * 40;
+      const tree = createTree(x, z, height);
+      this.scene.add(tree);
+    }
 
-    const fieldWidth = 111; // Matches game field
-    const boundaryPoints = [
-      new THREE.Vector3(-fieldWidth, 0, 50),
-      new THREE.Vector3(-fieldWidth, 0, -500),
-    ];
-    const leftBoundary = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(boundaryPoints),
-      boundaryMaterial
-    );
-    this.scene.add(leftBoundary);
-
-    const rightBoundaryPoints = [
-      new THREE.Vector3(fieldWidth, 0, 50),
-      new THREE.Vector3(fieldWidth, 0, -500),
-    ];
-    const rightBoundary = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(rightBoundaryPoints),
-      boundaryMaterial
-    );
-    this.scene.add(rightBoundary);
+    // No boundary lines
   }
 
   private createStarField(): void {
@@ -139,7 +154,7 @@ export class SceneManager {
     starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     const starMaterial = new THREE.PointsMaterial({
-      color: 0x00ff00,
+      color: 0xaaddff,
       size: 1.5,
       sizeAttenuation: true
     });

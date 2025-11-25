@@ -159,12 +159,14 @@ export class Alien {
     const sprite = ALIEN_SPRITES[this.type];
     const color = this.getColor(1.0); // Start at full brightness
 
-    // Create geometry for voxels
-    const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize * 0.5);
+    // Create geometry for voxels - full depth for blocky 3D look
+    const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize * 2);
 
-    // Use MeshBasicMaterial for maximum brightness (unlit)
-    const material = new THREE.MeshBasicMaterial({
+    // Use MeshLambertMaterial for shaded 3D look
+    const material = new THREE.MeshLambertMaterial({
       color: color,
+      emissive: color,
+      emissiveIntensity: 0.3, // Slight glow so they're still visible
     });
 
     // Create instanced mesh for each animation frame
@@ -235,9 +237,12 @@ export class Alien {
 
     const color = new THREE.Color(this.getColor(brightness));
 
-    // Update material color for both animation frames
+    // Update material color and emissive for both animation frames
     this.voxels.forEach(mesh => {
-      (mesh.material as THREE.MeshBasicMaterial).color = color;
+      const mat = mesh.material as THREE.MeshLambertMaterial;
+      mat.color = color;
+      mat.emissive = color;
+      mat.emissiveIntensity = 0.3 * brightness;
     });
   }
 
