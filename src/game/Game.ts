@@ -47,6 +47,8 @@ export class Game {
   private lastTime: number = 0;
   private waveCompleteDelayTimer: number = 0;
   private lifeLostDelayTimer: number = 0;
+  private waveCompleteTuneTimer: number = 0;  // Auto-continue after tune
+  private lifeLostTuneTimer: number = 0;      // Auto-continue after tune
   private gameTime: number = 0;  // Track game time for dive shots
 
   // UI Elements
@@ -137,10 +139,6 @@ export class Game {
       } else if (this.state === GameState.GAME_OVER) {
         this.resetGame();
         this.startGame();
-      } else if (this.state === GameState.WAVE_COMPLETE) {
-        this.nextWave();
-      } else if (this.state === GameState.LIFE_LOST) {
-        this.continueAfterLifeLost();
       }
     }
   }
@@ -268,6 +266,18 @@ export class Game {
       // Wait for both timer and all explosions to finish
       if (this.lifeLostDelayTimer <= 0 && !this.explosionManager.hasActiveParticles()) {
         this.showLifeLost();
+      }
+    } else if (this.state === GameState.WAVE_COMPLETE) {
+      // Auto-continue after tune plays
+      this.waveCompleteTuneTimer -= deltaTime;
+      if (this.waveCompleteTuneTimer <= 0) {
+        this.nextWave();
+      }
+    } else if (this.state === GameState.LIFE_LOST) {
+      // Auto-continue after tune plays
+      this.lifeLostTuneTimer -= deltaTime;
+      if (this.lifeLostTuneTimer <= 0) {
+        this.continueAfterLifeLost();
       }
     } else if (this.state === GameState.INVASION_LANDING) {
       // Update the alien landing animation
@@ -480,7 +490,8 @@ export class Game {
   private showWaveComplete(): void {
     this.state = GameState.WAVE_COMPLETE;
     this.audioManager.playWaveComplete();
-    this.showMessage('WAVE COMPLETE\nPRESS SPACE TO CONTINUE');
+    this.showMessage(`WAVE ${this.wave} COMPLETE`);
+    this.waveCompleteTuneTimer = 5.0; // Auto-continue after tune (~5 seconds)
   }
 
   private startLifeLostSequence(): void {
@@ -504,9 +515,8 @@ export class Game {
 
   private showLifeLost(): void {
     this.state = GameState.LIFE_LOST;
-    this.crosshair.style.display = 'none';
-    document.exitPointerLock();
-    this.showMessage(`LIFE LOST\nLIVES REMAINING: ${this.lives}\nPRESS SPACE TO CONTINUE`);
+    this.showMessage(`LIVES: ${this.lives}`);
+    this.lifeLostTuneTimer = 5.0; // Auto-continue after tune (~5 seconds)
   }
 
   private continueAfterLifeLost(): void {

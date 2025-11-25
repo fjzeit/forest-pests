@@ -92,29 +92,59 @@ export class AudioManager {
     this.currentTempo = minTempo + (maxTempo - minTempo) * ratio;
   }
 
-  // Quiet turret fire - short laser zap
+  // Punchy sci-fi laser blast
   playPlayerShoot(): void {
     if (!this.audioContext) return;
 
-    const duration = 0.08;
+    const now = this.audioContext.currentTime;
 
-    // Quick descending tone for laser effect
-    const oscillator = this.audioContext.createOscillator();
-    const gainNode = this.audioContext.createGain();
+    // Layer 1: High-pitched zap with fast sweep down
+    const zap = this.audioContext.createOscillator();
+    const zapGain = this.audioContext.createGain();
+    zap.type = 'sawtooth';
+    zap.frequency.setValueAtTime(2000, now);
+    zap.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+    zapGain.gain.setValueAtTime(0.15, now);
+    zapGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    zap.connect(zapGain);
+    zapGain.connect(this.audioContext.destination);
+    zap.start(now);
+    zap.stop(now + 0.15);
 
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + duration);
+    // Layer 2: Punchy mid thump for impact
+    const thump = this.audioContext.createOscillator();
+    const thumpGain = this.audioContext.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(150, now);
+    thump.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+    thumpGain.gain.setValueAtTime(0.25, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+    thump.connect(thumpGain);
+    thumpGain.connect(this.audioContext.destination);
+    thump.start(now);
+    thump.stop(now + 0.1);
 
-    // Very quiet
-    gainNode.gain.setValueAtTime(0.08, this.audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
-
-    oscillator.start();
-    oscillator.stop(this.audioContext.currentTime + duration);
+    // Layer 3: Noise burst for sizzle
+    const bufferSize = this.audioContext.sampleRate * 0.08;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      const decay = Math.pow(1 - (i / bufferSize), 2);
+      data[i] = (Math.random() * 2 - 1) * decay;
+    }
+    const noise = this.audioContext.createBufferSource();
+    noise.buffer = buffer;
+    const noiseFilter = this.audioContext.createBiquadFilter();
+    noiseFilter.type = 'highpass';
+    noiseFilter.frequency.setValueAtTime(3000, now);
+    const noiseGain = this.audioContext.createGain();
+    noiseGain.gain.setValueAtTime(0.1, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.audioContext.destination);
+    noise.start(now);
+    noise.stop(now + 0.08);
   }
 
   // Disabled - too noisy
@@ -158,23 +188,32 @@ export class AudioManager {
     noise.stop(this.audioContext.currentTime + duration);
   }
 
-  // Life lost - sad descending tones
+  // Life lost - moderately sad tune ~5 seconds
   playLifeLost(): void {
     if (!this.audioContext) return;
 
-    // Descending sad tones
-    const notes = [
-      { freq: 400, time: 0, duration: 0.2 },
-      { freq: 300, time: 0.2, duration: 0.2 },
-      { freq: 200, time: 0.4, duration: 0.2 },
-      { freq: 100, time: 0.6, duration: 0.4 },
-    ];
+    const vol = 0.18;
 
-    notes.forEach(note => {
-      setTimeout(() => {
-        this.playTone(note.freq, note.duration, 'square', 0.15);
-      }, note.time * 1000);
-    });
+    // Initial descending "uh oh" motif
+    setTimeout(() => this.playTone(440, 0.25, 'square', vol), 0);     // A4
+    setTimeout(() => this.playTone(392, 0.25, 'square', vol), 300);   // G4
+    setTimeout(() => this.playTone(349, 0.4, 'square', vol), 600);    // F4
+
+    // Melancholic middle section
+    setTimeout(() => this.playTone(330, 0.2, 'square', vol), 1200);   // E4
+    setTimeout(() => this.playTone(349, 0.2, 'square', vol), 1450);   // F4
+    setTimeout(() => this.playTone(330, 0.2, 'square', vol), 1700);   // E4
+    setTimeout(() => this.playTone(294, 0.35, 'square', vol), 1950);  // D4
+
+    // Slight recovery hint (not as final as game over)
+    setTimeout(() => this.playTone(330, 0.2, 'square', vol), 2500);   // E4
+    setTimeout(() => this.playTone(349, 0.2, 'square', vol), 2750);   // F4
+    setTimeout(() => this.playTone(330, 0.5, 'square', vol), 3000);   // E4
+
+    // Ending - minor resolve
+    setTimeout(() => this.playTone(262, 0.3, 'square', vol * 0.8), 3700);  // C4
+    setTimeout(() => this.playTone(330, 0.3, 'square', vol * 0.8), 3750);  // E4
+    setTimeout(() => this.playTone(392, 0.8, 'square', vol * 0.6), 3800);  // G4 - minor chord feel
   }
 
   // Disabled - too noisy
@@ -222,19 +261,55 @@ export class AudioManager {
   }
 
   playWaveComplete(): void {
-    // Triumphant ascending tones
-    setTimeout(() => this.playTone(440, 0.1, 'square', 0.2), 0);
-    setTimeout(() => this.playTone(554, 0.1, 'square', 0.2), 100);
-    setTimeout(() => this.playTone(659, 0.1, 'square', 0.2), 200);
-    setTimeout(() => this.playTone(880, 0.3, 'square', 0.2), 300);
+    // Happy triumphant fanfare - ~5 seconds
+    const vol = 0.2;
+    // Opening flourish
+    setTimeout(() => this.playTone(523, 0.1, 'square', vol), 0);      // C5
+    setTimeout(() => this.playTone(659, 0.1, 'square', vol), 100);    // E5
+    setTimeout(() => this.playTone(784, 0.1, 'square', vol), 200);    // G5
+    setTimeout(() => this.playTone(1047, 0.3, 'square', vol), 300);   // C6
+
+    // Victory melody
+    setTimeout(() => this.playTone(784, 0.15, 'square', vol), 700);   // G5
+    setTimeout(() => this.playTone(880, 0.15, 'square', vol), 900);   // A5
+    setTimeout(() => this.playTone(784, 0.15, 'square', vol), 1100);  // G5
+    setTimeout(() => this.playTone(659, 0.15, 'square', vol), 1300);  // E5
+    setTimeout(() => this.playTone(784, 0.4, 'square', vol), 1500);   // G5
+
+    // Second phrase - higher
+    setTimeout(() => this.playTone(880, 0.15, 'square', vol), 2100);  // A5
+    setTimeout(() => this.playTone(988, 0.15, 'square', vol), 2300);  // B5
+    setTimeout(() => this.playTone(1047, 0.15, 'square', vol), 2500); // C6
+    setTimeout(() => this.playTone(988, 0.15, 'square', vol), 2700);  // B5
+    setTimeout(() => this.playTone(1047, 0.5, 'square', vol), 2900);  // C6
+
+    // Final triumphant chord arpeggio
+    setTimeout(() => this.playTone(523, 0.8, 'square', vol * 0.8), 3600);  // C5
+    setTimeout(() => this.playTone(659, 0.8, 'square', vol * 0.8), 3650);  // E5
+    setTimeout(() => this.playTone(784, 0.8, 'square', vol * 0.8), 3700);  // G5
+    setTimeout(() => this.playTone(1047, 1.0, 'square', vol), 3750);       // C6
   }
 
   playGameOver(): void {
-    // Descending sad tones
-    setTimeout(() => this.playTone(440, 0.2, 'square', 0.2), 0);
-    setTimeout(() => this.playTone(330, 0.2, 'square', 0.2), 200);
-    setTimeout(() => this.playTone(262, 0.2, 'square', 0.2), 400);
-    setTimeout(() => this.playTone(196, 0.4, 'square', 0.2), 600);
+    // Very sad game over dirge - ~5 seconds
+    const vol = 0.2;
+
+    // Dramatic opening - descending doom
+    setTimeout(() => this.playTone(392, 0.4, 'square', vol), 0);      // G4
+    setTimeout(() => this.playTone(349, 0.4, 'square', vol), 450);    // F4
+    setTimeout(() => this.playTone(330, 0.4, 'square', vol), 900);    // E4
+    setTimeout(() => this.playTone(294, 0.6, 'square', vol), 1350);   // D4
+
+    // Mournful melody
+    setTimeout(() => this.playTone(262, 0.3, 'square', vol), 2100);   // C4
+    setTimeout(() => this.playTone(294, 0.3, 'square', vol), 2450);   // D4
+    setTimeout(() => this.playTone(262, 0.3, 'square', vol), 2800);   // C4
+    setTimeout(() => this.playTone(247, 0.5, 'square', vol), 3150);   // B3
+
+    // Final death knell - very low
+    setTimeout(() => this.playTone(196, 0.3, 'square', vol), 3800);   // G3
+    setTimeout(() => this.playTone(165, 0.3, 'square', vol), 4150);   // E3
+    setTimeout(() => this.playTone(131, 1.2, 'square', vol * 0.7), 4500); // C3 - long fade
   }
 
   // Flying saucer sound for wave intro

@@ -38,7 +38,7 @@ export const GameConfig = {
     basePitch: 0.5,        // Base camera pitch (~29 degrees up)
     height: 5,             // Camera height
     zPosition: -50,        // Z position (50% closer to shields)
-    fireRate: 0.4,         // Minimum seconds between shots
+    fireRate: 0.3,         // Minimum seconds between shots (25% faster)
   },
 
   // Projectiles
@@ -51,13 +51,13 @@ export const GameConfig = {
 
   // Shields
   shields: {
-    count: 1,              // One long shield
-    width: 200,            // Wide enough to span the field
+    count: 4,              // Four shields
+    width: 24,             // Width of each shield
     height: 30,            // Taller to block all incoming shots
     depth: 6,
     distance: 100,         // Z distance from player
     height_y: 0,           // Start at ground level
-    spacing: 0,            // Not used with single shield
+    spacing: 50,           // Spacing between shields
     voxelSize: 2,
     playerDamageRadius: 1, // Smaller radius for player shots hitting shield
   },

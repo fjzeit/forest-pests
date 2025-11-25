@@ -66,7 +66,7 @@ export class InputManager {
   }
 
   isFiring(): boolean {
-    return this._isFiring || this.keys.has('Space');
+    return this._isFiring;  // Mouse click only - Space is used for menu
   }
 
   getMoveInput(): { x: number; y: number } {

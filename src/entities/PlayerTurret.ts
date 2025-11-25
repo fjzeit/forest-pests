@@ -35,77 +35,52 @@ export class PlayerTurret {
     const skinColor = new THREE.MeshBasicMaterial({ color: 0xe8b896 });
     const sleeveColor = new THREE.MeshBasicMaterial({ color: 0x333344 }); // Dark suit
 
-    // === RIGHT ARM (gripping pistol) ===
-    const rightForearmGeom = new THREE.BoxGeometry(1.0, 0.7, 2.5);
-    const rightForearm = new THREE.Mesh(rightForearmGeom, sleeveColor);
-    rightForearm.position.set(0.9, -1.6, -4);
-    rightForearm.rotation.x = 0.2;
-    this.gunGroup.add(rightForearm);
-
-    // Right hand on grip
-    const rightHandGeom = new THREE.BoxGeometry(0.6, 0.5, 1.0);
-    const rightHand = new THREE.Mesh(rightHandGeom, skinColor);
-    rightHand.position.set(0.6, -1.4, -5.3);
-    this.gunGroup.add(rightHand);
-
-    // === LEFT ARM (supporting/wrapping around right hand) ===
-    const leftForearmGeom = new THREE.BoxGeometry(1.0, 0.7, 2.5);
-    const leftForearm = new THREE.Mesh(leftForearmGeom, sleeveColor);
-    leftForearm.position.set(-0.2, -1.8, -4.5);
-    leftForearm.rotation.set(0.3, 0.4, 0);
-    this.gunGroup.add(leftForearm);
-
-    // Left hand wrapping around right hand
-    const leftHandGeom = new THREE.BoxGeometry(0.6, 0.5, 1.0);
-    const leftHand = new THREE.Mesh(leftHandGeom, skinColor);
-    leftHand.position.set(0.2, -1.5, -5.5);
-    this.gunGroup.add(leftHand);
-
-    // === LASER PISTOL ===
+    // === LASER PISTOL (no arms, larger gun) ===
     const gunBodyGroup = new THREE.Group();
+    const gunScale = 1.8; // Scale up the gun
 
     // Main body - sleek angular shape
-    const bodyGeom = new THREE.BoxGeometry(0.6, 0.8, 3);
+    const bodyGeom = new THREE.BoxGeometry(0.6 * gunScale, 0.8 * gunScale, 3 * gunScale);
     const body = new THREE.Mesh(bodyGeom, gunBody);
-    body.position.set(0.6, -1, -7);
+    body.position.set(0.6, -1.2, -5);
     gunBodyGroup.add(body);
 
     // Top rail/sight mount
-    const railGeom = new THREE.BoxGeometry(0.3, 0.2, 2);
+    const railGeom = new THREE.BoxGeometry(0.3 * gunScale, 0.2 * gunScale, 2 * gunScale);
     const rail = new THREE.Mesh(railGeom, gunAccent);
-    rail.position.set(0.6, -0.5, -7);
+    rail.position.set(0.6, -0.4, -5);
     gunBodyGroup.add(rail);
 
     // Energy cell/power pack (glowing)
-    const cellGeom = new THREE.BoxGeometry(0.4, 0.6, 0.8);
+    const cellGeom = new THREE.BoxGeometry(0.4 * gunScale, 0.6 * gunScale, 0.8 * gunScale);
     const cell = new THREE.Mesh(cellGeom, gunGlow);
-    cell.position.set(0.6, -1.6, -6);
+    cell.position.set(0.6, -2.2, -3.5);
     gunBodyGroup.add(cell);
 
     // Pistol grip
-    const gripGeom = new THREE.BoxGeometry(0.4, 1.2, 0.6);
+    const gripGeom = new THREE.BoxGeometry(0.4 * gunScale, 1.2 * gunScale, 0.6 * gunScale);
     const grip = new THREE.Mesh(gripGeom, gunAccent);
-    grip.position.set(0.6, -2, -5.5);
+    grip.position.set(0.6, -2.8, -3);
     grip.rotation.x = -0.3;
     gunBodyGroup.add(grip);
 
     // Barrel shroud - angular
-    const shroudGeom = new THREE.BoxGeometry(0.5, 0.5, 2.5);
+    const shroudGeom = new THREE.BoxGeometry(0.5 * gunScale, 0.5 * gunScale, 2.5 * gunScale);
     const shroud = new THREE.Mesh(shroudGeom, gunBody);
-    shroud.position.set(0.6, -1, -9);
+    shroud.position.set(0.6, -1.2, -8);
     gunBodyGroup.add(shroud);
 
     // Barrel - glowing emitter
-    const barrelGeom = new THREE.CylinderGeometry(0.12, 0.15, 1.5, 8);
+    const barrelGeom = new THREE.CylinderGeometry(0.12 * gunScale, 0.15 * gunScale, 1.5 * gunScale, 8);
     const barrel = new THREE.Mesh(barrelGeom, gunGlow);
     barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0.6, -1, -10.5);
+    barrel.position.set(0.6, -1.2, -10);
     gunBodyGroup.add(barrel);
 
     // Muzzle emitter ring
-    const muzzleGeom = new THREE.TorusGeometry(0.2, 0.05, 8, 16);
+    const muzzleGeom = new THREE.TorusGeometry(0.25 * gunScale, 0.06 * gunScale, 8, 16);
     const muzzle = new THREE.Mesh(muzzleGeom, gunGlow);
-    muzzle.position.set(0.6, -1, -11.2);
+    muzzle.position.set(0.6, -1.2, -11);
     gunBodyGroup.add(muzzle);
 
     this.gunGroup.add(gunBodyGroup);
@@ -165,8 +140,8 @@ export class PlayerTurret {
     if (input.isPointerLocked()) {
       const mouseDelta = input.getMouseDelta();
 
-      // Limited horizontal aiming (~8 degrees = 0.14 radians)
-      const maxYawLimit = 0.14;
+      // Limited horizontal aiming (~18 degrees = 0.31 radians)
+      const maxYawLimit = 0.31;
       this.yaw -= mouseDelta.x * GameConfig.player.aimSensitivity;
       this.yaw = Math.max(-maxYawLimit, Math.min(maxYawLimit, this.yaw));
 
@@ -212,8 +187,8 @@ export class PlayerTurret {
     direction.normalize();
 
     // Start projectile at muzzle position (end of gun barrel)
-    // Muzzle emitter is at local position (0.6, -1, -11.2) relative to gun group
-    const muzzleLocal = new THREE.Vector3(0.6, -1, -11.5);
+    // Muzzle emitter is at local position (0.6, -1.2, -11) relative to gun group
+    const muzzleLocal = new THREE.Vector3(0.6, -1.2, -11.5);
     const position = this.gunGroup.localToWorld(muzzleLocal.clone());
 
     return { position, direction };
