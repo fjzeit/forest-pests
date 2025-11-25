@@ -64,7 +64,7 @@ export const GameConfig = {
 
   // Gameplay
   gameplay: {
-    lives: 3,
+    lives: 5,
     hitsPerLife: 20,          // Damage points before losing a life
     speedMultiplierMin: 0.3,  // Speed when 1 alien left vs full formation
     dangerDistance: 100,      // Game over if aliens reach the shields

@@ -312,6 +312,61 @@ export class AudioManager {
     setTimeout(() => this.playTone(131, 1.2, 'square', vol * 0.7), 4500); // C3 - long fade
   }
 
+  // Wacky intro tune - plays before aliens form up (~4 seconds)
+  playWaveIntro(): void {
+    if (!this.audioContext) return;
+
+    const vol = 0.18;
+
+    // Quirky ascending "here they come!" opening
+    setTimeout(() => this.playTone(262, 0.08, 'square', vol), 0);     // C4
+    setTimeout(() => this.playTone(330, 0.08, 'square', vol), 80);    // E4
+    setTimeout(() => this.playTone(392, 0.08, 'square', vol), 160);   // G4
+    setTimeout(() => this.playTone(523, 0.15, 'square', vol), 240);   // C5
+
+    // Bouncy descending riff
+    setTimeout(() => this.playTone(494, 0.08, 'square', vol), 450);   // B4
+    setTimeout(() => this.playTone(440, 0.08, 'square', vol), 530);   // A4
+    setTimeout(() => this.playTone(392, 0.08, 'square', vol), 610);   // G4
+    setTimeout(() => this.playTone(330, 0.12, 'square', vol), 690);   // E4
+
+    // Wacky chromatic wiggle
+    setTimeout(() => this.playTone(349, 0.06, 'square', vol), 900);   // F4
+    setTimeout(() => this.playTone(370, 0.06, 'square', vol), 960);   // F#4
+    setTimeout(() => this.playTone(392, 0.06, 'square', vol), 1020);  // G4
+    setTimeout(() => this.playTone(370, 0.06, 'square', vol), 1080);  // F#4
+    setTimeout(() => this.playTone(349, 0.06, 'square', vol), 1140);  // F4
+    setTimeout(() => this.playTone(330, 0.15, 'square', vol), 1200);  // E4
+
+    // Second phrase - higher energy
+    setTimeout(() => this.playTone(523, 0.08, 'square', vol), 1500);  // C5
+    setTimeout(() => this.playTone(587, 0.08, 'square', vol), 1580);  // D5
+    setTimeout(() => this.playTone(659, 0.08, 'square', vol), 1660);  // E5
+    setTimeout(() => this.playTone(698, 0.15, 'square', vol), 1740);  // F5
+
+    // Silly descending slide
+    setTimeout(() => this.playTone(659, 0.06, 'square', vol), 1950);  // E5
+    setTimeout(() => this.playTone(622, 0.06, 'square', vol), 2010);  // Eb5
+    setTimeout(() => this.playTone(587, 0.06, 'square', vol), 2070);  // D5
+    setTimeout(() => this.playTone(554, 0.06, 'square', vol), 2130);  // C#5
+    setTimeout(() => this.playTone(523, 0.12, 'square', vol), 2190);  // C5
+
+    // Bouncy buildup
+    setTimeout(() => this.playTone(392, 0.08, 'square', vol), 2400);  // G4
+    setTimeout(() => this.playTone(440, 0.08, 'square', vol), 2500);  // A4
+    setTimeout(() => this.playTone(494, 0.08, 'square', vol), 2600);  // B4
+    setTimeout(() => this.playTone(523, 0.08, 'square', vol), 2700);  // C5
+    setTimeout(() => this.playTone(587, 0.08, 'square', vol), 2800);  // D5
+    setTimeout(() => this.playTone(659, 0.08, 'square', vol), 2900);  // E5
+
+    // Final "get ready!" flourish
+    setTimeout(() => this.playTone(784, 0.1, 'square', vol), 3100);   // G5
+    setTimeout(() => this.playTone(880, 0.1, 'square', vol), 3200);   // A5
+    setTimeout(() => this.playTone(784, 0.1, 'square', vol), 3300);   // G5
+    setTimeout(() => this.playTone(659, 0.1, 'square', vol), 3400);   // E5
+    setTimeout(() => this.playTone(784, 0.4, 'square', vol * 1.2), 3550); // G5 - strong finish
+  }
+
   // Flying saucer sound for wave intro
   private saucerOscillator: OscillatorNode | null = null;
   private saucerGain: GainNode | null = null;
