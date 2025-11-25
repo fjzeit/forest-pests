@@ -30,8 +30,7 @@ export class PlayerTurret {
     // Turret base - flat cylinder
     const baseGeometry = new THREE.CylinderGeometry(6, 8, 3, 8);
     const turretMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
-      wireframe: true
+      color: 0x888888
     });
     this.turretBase = new THREE.Mesh(baseGeometry, turretMaterial);
     this.turretBase.position.y = 1.5;
@@ -154,5 +153,20 @@ export class PlayerTurret {
   // For collision detection - returns a bounding sphere around player
   getBoundingSphere(): THREE.Sphere {
     return new THREE.Sphere(this.position.clone(), 2);
+  }
+
+  // Get turret mesh position for explosions
+  getTurretPosition(): THREE.Vector3 {
+    return this.turretGroup.position.clone().add(new THREE.Vector3(0, 3, 0));
+  }
+
+  // Hide turret (for explosion)
+  hideTurret(): void {
+    this.turretGroup.visible = false;
+  }
+
+  // Show turret
+  showTurret(): void {
+    this.turretGroup.visible = true;
   }
 }

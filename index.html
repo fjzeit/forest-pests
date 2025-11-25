@@ -15,6 +15,84 @@
       height: 100%;
       overflow: hidden;
       background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #game-container {
+      position: relative;
+      aspect-ratio: 6 / 4;
+      max-width: calc(100% - 80px);
+      max-height: calc(100% - 80px);
+      width: auto;
+      height: calc(100% - 80px);
+      overflow: hidden;
+      border: 30px solid transparent;
+      border-radius: 12px;
+      background:
+        linear-gradient(#0a0a08, #0a0a08) padding-box,
+        linear-gradient(
+          145deg,
+          #8b7355 0%,
+          #6b5344 15%,
+          #4a3828 40%,
+          #3a2818 60%,
+          #2a1808 85%,
+          #1a0800 100%
+        ) border-box;
+      box-shadow:
+        inset 0 0 50px rgba(0, 0, 0, 0.9),
+        inset 0 0 10px rgba(0, 255, 0, 0.02),
+        0 8px 32px rgba(0, 0, 0, 0.7),
+        0 0 0 3px #1a1008,
+        0 0 0 6px #3a2818,
+        0 0 0 10px #0a0400;
+    }
+    #game-container::before {
+      content: 'SPACE INVADERS';
+      position: absolute;
+      top: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 3px;
+      color: #c4a060;
+      text-shadow: 0 1px 0 #2a1808;
+      pointer-events: none;
+      z-index: 1001;
+    }
+    #game-container::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 4px;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.03) 0%,
+        transparent 30%,
+        transparent 70%,
+        rgba(0, 0, 0, 0.1) 100%
+      );
+      box-shadow: inset 0 0 100px rgba(0, 255, 0, 0.02);
+      pointer-events: none;
+      z-index: 1000;
+    }
+    @media (min-aspect-ratio: 6/4) {
+      #game-container {
+        width: auto;
+        height: 100%;
+      }
+    }
+    @media (max-aspect-ratio: 6/4) {
+      #game-container {
+        width: 100%;
+        height: auto;
+      }
     }
     canvas {
       display: block;
@@ -126,6 +204,9 @@
       text-shadow: 0 0 20px #00ff00;
       text-align: center;
       display: none;
+      padding: 30px 50px;
+      border: 3px solid rgba(255, 255, 255, 0.7);
+      background: rgba(128, 128, 128, 0.7);
     }
     #start-prompt {
       position: absolute;
@@ -135,6 +216,9 @@
       font-size: 24px;
       text-shadow: 0 0 10px #00ff00;
       animation: blink 1s infinite;
+      padding: 20px 40px;
+      border: 3px solid rgba(255, 255, 255, 0.7);
+      background: rgba(128, 128, 128, 0.7);
     }
     @keyframes blink {
       0%, 100% { opacity: 1; }
@@ -178,17 +262,19 @@
   </style>
 </head>
 <body>
-  <div id="ui-overlay">
-    <div id="score-display">SCORE: <span id="score">0000</span></div>
-    <div id="lives-display">LIVES: <span id="lives">3</span></div>
-    <div id="wave-display">WAVE: <span id="wave">1</span></div>
-    <div id="health-bar-container">
-      <div id="health-bar"></div>
+  <div id="game-container">
+    <div id="ui-overlay">
+      <div id="score-display">SCORE: <span id="score">0000</span></div>
+      <div id="lives-display">LIVES: <span id="lives">3</span></div>
+      <div id="wave-display">WAVE: <span id="wave">1</span></div>
+      <div id="health-bar-container">
+        <div id="health-bar"></div>
+      </div>
+      <div id="crosshair"></div>
+      <div id="game-message"></div>
+      <div id="start-prompt">PRESS SPACE TO START</div>
+      <div id="damage-overlay"></div>
     </div>
-    <div id="crosshair"></div>
-    <div id="game-message"></div>
-    <div id="start-prompt">PRESS SPACE TO START</div>
-    <div id="damage-overlay"></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -27,12 +27,15 @@ export class Shield {
   private dummy: THREE.Object3D = new THREE.Object3D();
   private tiltAngle: number = 0.4; // Tilt angle in radians (~23 degrees) - tilted back to face incoming fire
 
-  constructor(position: THREE.Vector3, scene: THREE.Scene) {
+  private voxelHealth: number;
+
+  constructor(position: THREE.Vector3, scene: THREE.Scene, voxelHealth: number = 3) {
     this.position = position;
     this.voxelSize = GameConfig.shields.voxelSize;
     this.width = GameConfig.shields.width;
     this.height = GameConfig.shields.height;
     this.depth = GameConfig.shields.depth;
+    this.voxelHealth = voxelHealth;
 
     // Create instanced mesh for efficient rendering
     const voxelGeometry = new THREE.BoxGeometry(
@@ -78,7 +81,7 @@ export class Shield {
     const voxelsZ = Math.ceil(this.depth / this.voxelSize);
 
     let instanceId = 0;
-    const maxHealth = 3; // Hits to destroy each voxel
+    const maxHealth = this.voxelHealth;
 
     // Simple rectangular shape - no cutouts
     for (let x = 0; x < voxelsX; x++) {

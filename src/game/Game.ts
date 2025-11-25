@@ -18,6 +18,8 @@ export enum GameState {
   GAME_OVER,
   WAVE_COMPLETE,
   WAVE_COMPLETE_DELAY,
+  LIFE_LOST,
+  LIFE_LOST_DELAY,
 }
 
 export class Game {
@@ -42,6 +44,7 @@ export class Game {
 
   private lastTime: number = 0;
   private waveCompleteDelayTimer: number = 0;
+  private lifeLostDelayTimer: number = 0;
 
   // UI Elements
   private scoreElement!: HTMLElement;
@@ -105,11 +108,18 @@ export class Game {
     const totalWidth = (config.count - 1) * config.spacing;
     const startX = -totalWidth / 2;
 
+    // Shield health decreases with wave: 3 at wave 1, down to 1 at wave 100
+    const baseHealth = 3;
+    const minHealth = 1;
+    const waveProgress = Math.min((this.wave - 1) / 99, 1);
+    const shieldHealth = Math.max(minHealth, Math.round(baseHealth - (baseHealth - minHealth) * waveProgress));
+
     for (let i = 0; i < config.count; i++) {
       const x = startX + i * config.spacing;
       const shield = new Shield(
         new THREE.Vector3(x, config.height_y, -config.distance),
-        this.sceneManager.scene
+        this.sceneManager.scene,
+        shieldHealth
       );
       this.shields.push(shield);
     }
@@ -125,6 +135,8 @@ export class Game {
         this.startGame();
       } else if (this.state === GameState.WAVE_COMPLETE) {
         this.nextWave();
+      } else if (this.state === GameState.LIFE_LOST) {
+        this.continueAfterLifeLost();
       }
     }
   }
@@ -203,8 +215,17 @@ export class Game {
       // Continue updating explosions during delay
       this.explosionManager.update(deltaTime);
       this.waveCompleteDelayTimer -= deltaTime;
-      if (this.waveCompleteDelayTimer <= 0) {
+      // Wait for both timer and all explosions to finish
+      if (this.waveCompleteDelayTimer <= 0 && !this.explosionManager.hasActiveParticles()) {
         this.showWaveComplete();
+      }
+    } else if (this.state === GameState.LIFE_LOST_DELAY) {
+      // Continue updating explosions during delay
+      this.explosionManager.update(deltaTime);
+      this.lifeLostDelayTimer -= deltaTime;
+      // Wait for both timer and all explosions to finish
+      if (this.lifeLostDelayTimer <= 0 && !this.explosionManager.hasActiveParticles()) {
+        this.showLifeLost();
       }
     }
 
@@ -315,12 +336,11 @@ export class Game {
 
       if (this.currentHealth <= 0) {
         this.lives--;
-        this.audioManager.playPlayerHit(); // Big sound for life lost
         if (this.lives <= 0) {
           this.gameOver();
         } else {
-          // Reset health for next life
-          this.currentHealth = GameConfig.gameplay.hitsPerLife;
+          // Trigger life lost sequence
+          this.startLifeLostSequence();
         }
       }
     }
@@ -357,6 +377,49 @@ export class Game {
     this.state = GameState.WAVE_COMPLETE;
     this.audioManager.playWaveComplete();
     this.showMessage('WAVE COMPLETE\nPRESS SPACE TO CONTINUE');
+  }
+
+  private startLifeLostSequence(): void {
+    this.state = GameState.LIFE_LOST_DELAY;
+    this.audioManager.stopMarch();
+
+    // Explode the turret
+    const turretPos = this.player.getTurretPosition();
+    this.explosionManager.createTurretExplosion(turretPos);
+    this.player.hideTurret();
+
+    // Play sad sound
+    this.audioManager.playLifeLost();
+
+    // Clear projectiles
+    this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
+    this.projectiles = [];
+
+    this.lifeLostDelayTimer = 1.5; // Wait for explosion to finish
+  }
+
+  private showLifeLost(): void {
+    this.state = GameState.LIFE_LOST;
+    this.crosshair.style.display = 'none';
+    document.exitPointerLock();
+    this.showMessage(`LIFE LOST\nLIVES REMAINING: ${this.lives}\nPRESS SPACE TO CONTINUE`);
+  }
+
+  private continueAfterLifeLost(): void {
+    this.state = GameState.PLAYING;
+    this.messageElement.style.display = 'none';
+    this.crosshair.style.display = 'block';
+
+    // Reset health and show turret
+    this.currentHealth = GameConfig.gameplay.hitsPerLife;
+    this.player.showTurret();
+    this.player.reset();
+
+    // Restart march
+    this.audioManager.startMarch();
+    document.body.requestPointerLock();
+
+    this.updateUI();
   }
 
   private gameOver(): void {

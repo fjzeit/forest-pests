@@ -262,4 +262,96 @@ export class ExplosionManager {
     }
     this.particles = [];
   }
+
+  hasActiveParticles(): boolean {
+    return this.particles.length > 0;
+  }
+
+  createTurretExplosion(position: THREE.Vector3): void {
+    const color = 0x888888; // Grey like the turret
+
+    // 1. Big white core flash
+    const flashGeometry = new THREE.SphereGeometry(8, 8, 8);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 1.0,
+    });
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(position);
+    this.scene.add(flash);
+    this.particles.push({
+      mesh: flash,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 0.15,
+      maxLife: 0.15,
+    });
+
+    // 2. Large grey debris pieces
+    const debrisCount = 30;
+    for (let i = 0; i < debrisCount; i++) {
+      const material = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+      });
+
+      const mesh = new THREE.Mesh(this.debrisGeometry.clone(), material);
+      mesh.position.copy(position);
+      mesh.scale.setScalar(1.5 + Math.random() * 2.0);
+
+      // Debris flies outward in all directions
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      const speed = 30 + Math.random() * 40;
+      const velocity = new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.abs(Math.sin(phi) * Math.sin(theta)) * speed + 10, // Bias upward
+        Math.cos(phi) * speed
+      );
+
+      const life = 0.8 + Math.random() * 0.5;
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        velocity,
+        life,
+        maxLife: life,
+        rotationSpeed: new THREE.Vector3(
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20
+        ),
+      });
+    }
+
+    // 3. Orange/red fire particles
+    const fireCount = 15;
+    for (let i = 0; i < fireCount; i++) {
+      const fireMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff4400,
+        transparent: true,
+      });
+
+      const mesh = new THREE.Mesh(this.particleGeometry.clone(), fireMaterial);
+      mesh.position.copy(position);
+      mesh.scale.setScalar(2 + Math.random() * 2);
+
+      const theta = Math.random() * Math.PI * 2;
+      const speed = 15 + Math.random() * 20;
+      const velocity = new THREE.Vector3(
+        Math.cos(theta) * speed,
+        10 + Math.random() * 20,
+        Math.sin(theta) * speed
+      );
+
+      const life = 0.5 + Math.random() * 0.3;
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        velocity,
+        life,
+        maxLife: life,
+      });
+    }
+  }
 }

@@ -93,6 +93,7 @@ export class CRTEffect {
   private composer: EffectComposer;
   private crtPass: ShaderPass;
   private clock: THREE.Clock;
+  private container: HTMLElement;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -100,6 +101,10 @@ export class CRTEffect {
     camera: THREE.Camera
   ) {
     this.clock = new THREE.Clock();
+    this.container = document.getElementById('game-container')!;
+
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
 
     // Create composer
     this.composer = new EffectComposer(renderer);
@@ -110,7 +115,7 @@ export class CRTEffect {
 
     // Bloom pass (for the glow effect)
     const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      new THREE.Vector2(width, height),
       0.5,   // strength
       0.4,   // radius
       0.85   // threshold
@@ -119,7 +124,7 @@ export class CRTEffect {
 
     // CRT shader pass
     this.crtPass = new ShaderPass(CRTShader);
-    this.crtPass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+    this.crtPass.uniforms.resolution.value.set(width, height);
     this.composer.addPass(this.crtPass);
 
     // Handle resize
@@ -127,8 +132,8 @@ export class CRTEffect {
   }
 
   private onResize(_renderer: THREE.WebGLRenderer): void {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
 
     this.composer.setSize(width, height);
     this.crtPass.uniforms.resolution.value.set(width, height);

@@ -5,16 +5,24 @@ export class SceneManager {
   public scene: THREE.Scene;
   public camera: THREE.PerspectiveCamera;
   public renderer: THREE.WebGLRenderer;
+  private container: HTMLElement;
 
   constructor() {
+    // Get game container
+    this.container = document.getElementById('game-container')!;
+
     // Create scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(GameConfig.visual.backgroundColor);
 
-    // Create camera
+    // Get container dimensions
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+
+    // Create camera with 6:4 aspect ratio
     this.camera = new THREE.PerspectiveCamera(
       GameConfig.visual.fov,
-      window.innerWidth / window.innerHeight,
+      width / height,
       GameConfig.visual.nearPlane,
       GameConfig.visual.farPlane
     );
@@ -25,9 +33,9 @@ export class SceneManager {
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(window.devicePixelRatio);
-    document.body.appendChild(this.renderer.domElement);
+    this.container.insertBefore(this.renderer.domElement, this.container.firstChild);
 
     // Add ambient light
     const ambientLight = new THREE.AmbientLight(0x004400, 0.5);
@@ -141,9 +149,11 @@ export class SceneManager {
   }
 
   private onWindowResize(): void {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height);
   }
 
   public render(): void {
