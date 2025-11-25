@@ -489,7 +489,7 @@ export class Game {
   private showWaveComplete(): void {
     this.state = GameState.WAVE_COMPLETE;
     this.audioManager.playWaveComplete();
-    this.showMessage(`WAVE ${this.wave} COMPLETE`);
+    this.showMessage(`WAVE ${this.wave}`, 'COMPLETE');
     this.waveCompleteTuneTimer = 5.0; // Auto-continue after tune (~5 seconds)
   }
 
@@ -514,7 +514,7 @@ export class Game {
 
   private showLifeLost(): void {
     this.state = GameState.LIFE_LOST;
-    this.showMessage(`LIVES: ${this.lives}`);
+    this.showMessage('LIFE LOST', `LIVES: ${this.lives}`);
     this.lifeLostTuneTimer = 5.0; // Auto-continue after tune (~5 seconds)
   }
 
@@ -547,13 +547,19 @@ export class Game {
     this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
     this.projectiles = [];
 
-    this.showMessage(`GAME OVER\nFINAL SCORE: ${this.score}\nPRESS SPACE TO RESTART`);
+    this.showMessage('GAME OVER', `SCORE: ${this.score}`, 'PRESS SPACE TO RESTART');
   }
 
-  private showMessage(text: string): void {
-    this.messageElement.textContent = text;
-    this.messageElement.style.display = 'block';
-    this.messageElement.style.whiteSpace = 'pre-line';
+  private showMessage(title: string, info?: string, prompt?: string): void {
+    let html = `<div class="message-title">${title}</div>`;
+    if (info) {
+      html += `<div class="message-info">${info}</div>`;
+    }
+    if (prompt) {
+      html += `<div class="message-prompt">${prompt}</div>`;
+    }
+    this.messageElement.innerHTML = html;
+    this.messageElement.style.display = 'flex';
   }
 
   private showDamageEffect(): void {

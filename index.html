@@ -211,13 +211,32 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 4vmin;
-      text-shadow: 0 0 1vmin #00ff00;
-      text-align: center;
       display: none;
-      padding: 2vmin 4vmin;
-      border: 0.3vmin solid rgba(255, 255, 255, 0.7);
-      background: rgba(128, 128, 128, 0.7);
+      flex-direction: column;
+      align-items: center;
+      padding: 3vmin 5vmin;
+      border: 2px solid rgba(0, 170, 255, 0.5);
+      border-radius: 1vmin;
+      background: rgba(0, 50, 100, 0.5);
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+    }
+    #game-message .message-title {
+      font-size: 3vmin;
+      color: #00ff88;
+      text-shadow: 0 0 10px #00ff88;
+      margin-bottom: 1.5vmin;
+    }
+    #game-message .message-info {
+      font-size: 2vmin;
+      color: #aaccff;
+      margin-bottom: 0.5vmin;
+    }
+    #game-message .message-prompt {
+      font-size: 2vmin;
+      color: #00ff88;
+      text-shadow: 0 0 10px #00ff88;
+      margin-top: 1.5vmin;
+      animation: blink 1s infinite;
     }
     #start-screen {
       position: absolute;
