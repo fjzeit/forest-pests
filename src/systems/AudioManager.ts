@@ -7,7 +7,7 @@ export class AudioManager {
   private marchNoteIndex: number = 0;
   private currentTempo: number = 1000; // ms between notes
 
-  // Classic Space Invaders march notes (approximation)
+  // Classic march notes (approximation)
   private readonly marchNotes = [
     { freq: 55, duration: 0.1 },   // A1
     { freq: 49, duration: 0.1 },   // G1

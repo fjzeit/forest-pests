@@ -9,7 +9,6 @@ export interface ShotData {
 
 export class PlayerTurret {
   private camera: THREE.PerspectiveCamera;
-  private scene: THREE.Scene;
   private position: THREE.Vector3;
   private yaw: number = 0;       // Horizontal rotation
   private pitch: number;          // Vertical rotation (starts at base pitch)
@@ -21,7 +20,6 @@ export class PlayerTurret {
 
   constructor(camera: THREE.PerspectiveCamera, scene: THREE.Scene) {
     this.camera = camera;
-    this.scene = scene;
     this.position = new THREE.Vector3(0, GameConfig.player.height, GameConfig.player.zPosition);
     this.pitch = GameConfig.player.basePitch;
 
@@ -32,8 +30,6 @@ export class PlayerTurret {
     const gunBody = new THREE.MeshBasicMaterial({ color: 0x444455 });
     const gunGlow = new THREE.MeshBasicMaterial({ color: 0x00ff44 });
     const gunAccent = new THREE.MeshBasicMaterial({ color: 0x222233 });
-    const skinColor = new THREE.MeshBasicMaterial({ color: 0xe8b896 });
-    const sleeveColor = new THREE.MeshBasicMaterial({ color: 0x333344 }); // Dark suit
 
     // === LASER PISTOL (no arms, larger gun) ===
     const gunBodyGroup = new THREE.Group();

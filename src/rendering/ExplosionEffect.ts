@@ -348,7 +348,6 @@ export class ExplosionManager {
         particle.mesh.scale.setScalar(expandScale);
       } else if (particle.mesh instanceof THREE.Mesh) {
         // Shrinking debris
-        const shrinkScale = Math.max(0.1, lifeRatio);
         particle.mesh.scale.multiplyScalar(0.98);
       }
 

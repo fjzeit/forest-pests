@@ -1,7 +1,7 @@
 {
   "name": "space-invaders-fp",
   "version": "1.0.0",
-  "description": "First-person Space Invaders homage with CRT aesthetic",
+  "description": "First-person Forest Pests game with CRT aesthetic",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GameConfig } from '../game/GameConfig';
-import { Alien, AlienType, DiveState, FlyInState } from './Alien';
+import { Alien, AlienType, DiveState } from './Alien';
 
 export type AlienShotType = 'rolling' | 'plunger' | 'squiggly';
 
@@ -559,7 +559,7 @@ export class AlienFormation {
     const startX = -totalWidth / 2;
 
     // Set up each alien with a random start position and staggered delay
-    this.aliens.forEach((alien, index) => {
+    this.aliens.forEach((alien) => {
       // Calculate target formation position
       const targetX = startX + alien.gridX * config.spacingX + this.formationX;
       const targetZ = this.formationZ - alien.gridY * config.spacingZ;
@@ -660,7 +660,6 @@ export class AlienFormation {
     const spreadX = 200; // Total width to spread across
 
     const aliveAliens = this.aliens.filter(a => a.alive);
-    const count = aliveAliens.length;
 
     aliveAliens.forEach((alien, index) => {
       const currentPos = alien.getPosition();

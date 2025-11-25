@@ -68,7 +68,7 @@ export class Game {
     this.livesElement = document.getElementById('lives')!;
     this.waveElement = document.getElementById('wave')!;
     this.messageElement = document.getElementById('game-message')!;
-    this.startPrompt = document.getElementById('start-prompt')!;
+    this.startPrompt = document.getElementById('start-screen')!;
     this.crosshair = document.getElementById('crosshair')!;
     this.damageOverlay = document.getElementById('damage-overlay')!;
     this.uiOverlay = document.getElementById('ui-overlay')!;
@@ -132,14 +132,13 @@ export class Game {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    if (e.code === 'Space') {
+    if (this.state === GameState.MENU) {
       e.preventDefault();
-      if (this.state === GameState.MENU) {
-        this.startGame();
-      } else if (this.state === GameState.GAME_OVER) {
-        this.resetGame();
-        this.startGame();
-      }
+      this.startGame();
+    } else if (this.state === GameState.GAME_OVER && e.code === 'Space') {
+      e.preventDefault();
+      this.resetGame();
+      this.startGame();
     }
   }
 

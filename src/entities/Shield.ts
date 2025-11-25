@@ -49,7 +49,6 @@ export class Shield {
   private position: THREE.Vector3;
   private width: number;
   private height: number;
-  private depth: number;
   private dummy: THREE.Object3D = new THREE.Object3D();
   private cellHealth: number;
   private time: number = 0;
@@ -61,7 +60,6 @@ export class Shield {
     this.position = position;
     this.width = GameConfig.shields.width;
     this.height = GameConfig.shields.height;
-    this.depth = GameConfig.shields.depth;
     this.cellHealth = cellHealth;
 
     // Create hexagon geometry for energy cells - vertical wall facing player
