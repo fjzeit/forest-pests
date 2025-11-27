@@ -70,17 +70,23 @@ export class TouchInputManager {
   private loadSavedPosition(): void {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
+      console.log('[Joystick] Loading saved position:', saved);
       if (saved) {
         const pos = JSON.parse(saved);
-        // Convert from percentages to actual position
-        this.joystickZone.style.right = 'auto';
-        this.joystickZone.style.bottom = 'auto';
-        this.joystickZone.style.left = `${pos.leftPercent}%`;
-        this.joystickZone.style.top = `${pos.topPercent}%`;
+        this.applyPosition(pos.leftPercent, pos.topPercent);
       }
     } catch (e) {
-      // Ignore errors, use default position
+      console.error('[Joystick] Error loading position:', e);
     }
+  }
+
+  private applyPosition(leftPercent: number, topPercent: number): void {
+    // Clear right/bottom positioning from CSS
+    this.joystickZone.style.setProperty('right', 'auto', 'important');
+    this.joystickZone.style.setProperty('bottom', 'auto', 'important');
+    this.joystickZone.style.setProperty('left', `${leftPercent}%`, 'important');
+    this.joystickZone.style.setProperty('top', `${topPercent}%`, 'important');
+    console.log('[Joystick] Applied position:', leftPercent, topPercent);
   }
 
   private savePosition(): void {
@@ -90,6 +96,7 @@ export class TouchInputManager {
       topPercent: (rect.top / window.innerHeight) * 100
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+    console.log('[Joystick] Saved position:', pos);
   }
 
   // Ensure joystick stays within screen bounds after orientation change
@@ -119,10 +126,9 @@ export class TouchInputManager {
     }
 
     if (needsUpdate) {
-      this.joystickZone.style.right = 'auto';
-      this.joystickZone.style.bottom = 'auto';
-      this.joystickZone.style.left = `${newLeft}px`;
-      this.joystickZone.style.top = `${newTop}px`;
+      const leftPercent = (newLeft / window.innerWidth) * 100;
+      const topPercent = (newTop / window.innerHeight) * 100;
+      this.applyPosition(leftPercent, topPercent);
       this.savePosition();
     }
   }
@@ -232,11 +238,10 @@ export class TouchInputManager {
     newLeft = Math.max(0, Math.min(newLeft, maxLeft));
     newTop = Math.max(0, Math.min(newTop, maxTop));
 
-    // Apply position
-    this.joystickZone.style.right = 'auto';
-    this.joystickZone.style.bottom = 'auto';
-    this.joystickZone.style.left = `${newLeft}px`;
-    this.joystickZone.style.top = `${newTop}px`;
+    // Apply position as percentages
+    const leftPercent = (newLeft / window.innerWidth) * 100;
+    const topPercent = (newTop / window.innerHeight) * 100;
+    this.applyPosition(leftPercent, topPercent);
   }
 
   private cancelLongPress(): void {

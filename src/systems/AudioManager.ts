@@ -42,20 +42,34 @@ export class AudioManager {
 
     if (!this.audioContext) return;
 
+    // Mark as unlocked immediately to prevent multiple attempts
+    this.unlocked = true;
+
     // Resume if suspended (required for iOS Safari)
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      this.audioContext.resume().then(() => {
+        this.playSilentBuffer();
+      });
+    } else {
+      this.playSilentBuffer();
     }
+  }
 
-    // Play a silent buffer to fully unlock audio on iOS Safari
-    // This is required because iOS won't actually enable audio until you play something
-    const silentBuffer = this.audioContext.createBuffer(1, 1, 22050);
+  // Play a silent buffer to fully unlock audio on iOS Safari
+  private playSilentBuffer(): void {
+    if (!this.audioContext) return;
+
+    // Use 0.1 seconds of silence at the context's sample rate
+    const sampleRate = this.audioContext.sampleRate;
+    const silentBuffer = this.audioContext.createBuffer(1, Math.floor(sampleRate * 0.1), sampleRate);
+    const channelData = silentBuffer.getChannelData(0);
+    for (let i = 0; i < channelData.length; i++) {
+      channelData[i] = 0; // Explicit silence
+    }
     const source = this.audioContext.createBufferSource();
     source.buffer = silentBuffer;
     source.connect(this.audioContext.destination);
     source.start(0);
-
-    this.unlocked = true;
   }
 
   private playTone(
@@ -424,9 +438,20 @@ export class AudioManager {
 
   startSaucerSound(): void {
     if (!this.audioContext) return;
+
+    // If context is suspended, wait for it to resume before playing
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      this.audioContext.resume().then(() => {
+        this.startSaucerSoundNow();
+      });
+    } else if (this.audioContext.state === 'running') {
+      this.startSaucerSoundNow();
     }
+    // If state is 'closed', do nothing
+  }
+
+  private startSaucerSoundNow(): void {
+    if (!this.audioContext) return;
     this.stopSaucerSound();
 
     // Create warbling UFO sound
