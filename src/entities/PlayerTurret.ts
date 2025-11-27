@@ -7,6 +7,9 @@ export interface ShotData {
   direction: THREE.Vector3;
 }
 
+// Maximum yaw angle in radians (~18 degrees each way, 36 total)
+const MAX_YAW = 0.31;
+
 export class PlayerTurret {
   private camera: THREE.PerspectiveCamera;
   private position: THREE.Vector3;
@@ -14,95 +17,99 @@ export class PlayerTurret {
   private pitch: number;          // Vertical rotation (starts at base pitch)
   private lastFireTime: number = 0;
 
-  // FPS gun and hands attached to camera
+  // Simple gun group
   private gunGroup: THREE.Group;
-  private recoilOffset: number = 0;  // For recoil animation
+  private recoilOffset: number = 0;
+
+  // HUD aim indicator
+  private aimIndicator: HTMLElement | null = null;
 
   constructor(camera: THREE.PerspectiveCamera, scene: THREE.Scene) {
     this.camera = camera;
     this.position = new THREE.Vector3(0, GameConfig.player.height, GameConfig.player.zPosition);
     this.pitch = GameConfig.player.basePitch;
 
-    // Create FPS gun and hands group
+    // Materials - clean space laser
+    const hull = new THREE.MeshBasicMaterial({ color: 0x667788 });
+    const hullLight = new THREE.MeshBasicMaterial({ color: 0x8899aa });
+    const energyGlow = new THREE.MeshBasicMaterial({ color: 0x00ff66 });
+
+    // === SPACE LASER CANNON ===
     this.gunGroup = new THREE.Group();
 
-    // Materials - sci-fi laser pistol
-    const gunBody = new THREE.MeshBasicMaterial({ color: 0x444455 });
-    const gunGlow = new THREE.MeshBasicMaterial({ color: 0x00ff44 });
-    const gunAccent = new THREE.MeshBasicMaterial({ color: 0x222233 });
+    // Rear housing
+    const rearGeom = new THREE.CylinderGeometry(0.7, 0.8, 2, 16);
+    const rear = new THREE.Mesh(rearGeom, hull);
+    rear.rotation.x = Math.PI / 2;
+    rear.position.set(0, 0, -2.5);
+    this.gunGroup.add(rear);
 
-    // === LASER PISTOL (no arms, larger gun) ===
-    const gunBodyGroup = new THREE.Group();
-    const gunScale = 1.8; // Scale up the gun
-
-    // Main body - sleek angular shape
-    const bodyGeom = new THREE.BoxGeometry(0.6 * gunScale, 0.8 * gunScale, 3 * gunScale);
-    const body = new THREE.Mesh(bodyGeom, gunBody);
-    body.position.set(0.6, -1.2, -5);
-    gunBodyGroup.add(body);
-
-    // Top rail/sight mount
-    const railGeom = new THREE.BoxGeometry(0.3 * gunScale, 0.2 * gunScale, 2 * gunScale);
-    const rail = new THREE.Mesh(railGeom, gunAccent);
-    rail.position.set(0.6, -0.4, -5);
-    gunBodyGroup.add(rail);
-
-    // Energy cell/power pack (glowing)
-    const cellGeom = new THREE.BoxGeometry(0.4 * gunScale, 0.6 * gunScale, 0.8 * gunScale);
-    const cell = new THREE.Mesh(cellGeom, gunGlow);
-    cell.position.set(0.6, -2.2, -3.5);
-    gunBodyGroup.add(cell);
-
-    // Pistol grip
-    const gripGeom = new THREE.BoxGeometry(0.4 * gunScale, 1.2 * gunScale, 0.6 * gunScale);
-    const grip = new THREE.Mesh(gripGeom, gunAccent);
-    grip.position.set(0.6, -2.8, -3);
-    grip.rotation.x = -0.3;
-    gunBodyGroup.add(grip);
-
-    // Barrel shroud - angular
-    const shroudGeom = new THREE.BoxGeometry(0.5 * gunScale, 0.5 * gunScale, 2.5 * gunScale);
-    const shroud = new THREE.Mesh(shroudGeom, gunBody);
-    shroud.position.set(0.6, -1.2, -8);
-    gunBodyGroup.add(shroud);
-
-    // Barrel - glowing emitter
-    const barrelGeom = new THREE.CylinderGeometry(0.12 * gunScale, 0.15 * gunScale, 1.5 * gunScale, 8);
-    const barrel = new THREE.Mesh(barrelGeom, gunGlow);
+    // Main barrel - long sleek cylinder
+    const barrelGeom = new THREE.CylinderGeometry(0.45, 0.5, 10, 16);
+    const barrel = new THREE.Mesh(barrelGeom, hullLight);
     barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0.6, -1.2, -10);
-    gunBodyGroup.add(barrel);
+    barrel.position.set(0, 0, -8.5);
+    this.gunGroup.add(barrel);
 
-    // Muzzle emitter ring
-    const muzzleGeom = new THREE.TorusGeometry(0.25 * gunScale, 0.06 * gunScale, 8, 16);
-    const muzzle = new THREE.Mesh(muzzleGeom, gunGlow);
-    muzzle.position.set(0.6, -1.2, -11);
-    gunBodyGroup.add(muzzle);
+    // Muzzle tip - glowing
+    const muzzleGeom = new THREE.CylinderGeometry(0.35, 0.45, 1, 16);
+    const muzzle = new THREE.Mesh(muzzleGeom, energyGlow);
+    muzzle.rotation.x = Math.PI / 2;
+    muzzle.position.set(0, 0, -14);
+    this.gunGroup.add(muzzle);
 
-    this.gunGroup.add(gunBodyGroup);
-
-    // Add gun to scene (not camera) - we'll position it manually each frame
     scene.add(this.gunGroup);
+
+    // Create HUD aim arc
+    this.createAimIndicator();
 
     this.updateCamera();
     this.updateGunPosition();
   }
 
+  private createAimIndicator(): void {
+    // Create SVG arc showing aim limits
+    this.aimIndicator = document.getElementById('aim-arc');
+    if (!this.aimIndicator) {
+      this.aimIndicator = document.createElement('div');
+      this.aimIndicator.id = 'aim-arc';
+      this.aimIndicator.innerHTML = `
+        <svg viewBox="0 0 200 30" preserveAspectRatio="xMidYMax meet">
+          <path d="M 10 25 Q 100 0 190 25" fill="none" stroke="rgba(0,170,255,0.4)" stroke-width="3"/>
+          <circle id="aim-dot" cx="100" cy="12" r="4" fill="#00ff44"/>
+        </svg>
+      `;
+      document.getElementById('ui-overlay')?.appendChild(this.aimIndicator);
+    }
+  }
+
+  private updateAimIndicator(): void {
+    const dot = document.getElementById('aim-dot');
+    if (dot) {
+      // Map yaw (-MAX_YAW to +MAX_YAW) to t parameter (0 to 1)
+      // Inverted so dot shows turret position relative to arc (aim left = dot right)
+      const normalizedYaw = (this.yaw / MAX_YAW); // -1 to 1
+      const t = (-normalizedYaw + 1) / 2; // 0 to 1, inverted
+
+      // Quadratic bezier: P0=(10,25), P1=(100,0), P2=(190,25)
+      // B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+      const oneMinusT = 1 - t;
+      const dotX = oneMinusT * oneMinusT * 10 + 2 * oneMinusT * t * 100 + t * t * 190;
+      const dotY = oneMinusT * oneMinusT * 25 + 2 * oneMinusT * t * 0 + t * t * 25;
+
+      dot.setAttribute('cx', dotX.toString());
+      dot.setAttribute('cy', dotY.toString());
+    }
+  }
+
   private updateGunPosition(): void {
-    // Position gun relative to camera - very close, bottom right
-    // Offset: right, down, forward from camera
-    const offset = new THREE.Vector3(1.5, -1.2, -2);
-
-    // Apply camera rotation to offset
+    // Position gun protruding from viewer, low in view
+    const offset = new THREE.Vector3(0, -2.5, 0);
     offset.applyQuaternion(this.camera.quaternion);
-
-    // Position gun at camera position + rotated offset
     this.gunGroup.position.copy(this.camera.position).add(offset);
 
-    // Match gun rotation to camera, with recoil
+    // Match gun rotation to camera with recoil
     this.gunGroup.quaternion.copy(this.camera.quaternion);
-
-    // Apply recoil rotation (pitch up slightly)
     if (this.recoilOffset > 0) {
       const recoilQuat = new THREE.Quaternion();
       recoilQuat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -this.recoilOffset * 0.3);
@@ -140,10 +147,9 @@ export class PlayerTurret {
         ? GameConfig.touch.aimSensitivity
         : GameConfig.player.aimSensitivity;
 
-      // Limited horizontal aiming (~18 degrees = 0.31 radians)
-      const maxYawLimit = 0.31;
+      // Limited horizontal aiming - use MAX_YAW constant
       this.yaw -= aimDelta.x * sensitivity;
-      this.yaw = Math.max(-maxYawLimit, Math.min(maxYawLimit, this.yaw));
+      this.yaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, this.yaw));
 
       // Update pitch (vertical)
       this.pitch -= aimDelta.y * sensitivity;
@@ -161,6 +167,7 @@ export class PlayerTurret {
 
     this.updateCamera();
     this.updateGunPosition();
+    this.updateAimIndicator();
   }
 
   private updateCamera(): void {
@@ -186,9 +193,8 @@ export class PlayerTurret {
     direction.applyQuaternion(this.camera.quaternion);
     direction.normalize();
 
-    // Start projectile at muzzle position (end of gun barrel)
-    // Muzzle emitter is at local position (0.6, -1.2, -11) relative to gun group
-    const muzzleLocal = new THREE.Vector3(0.6, -1.2, -11.5);
+    // Start projectile at muzzle position (end of barrel)
+    const muzzleLocal = new THREE.Vector3(0, 0.3, -14.5);
     const position = this.gunGroup.localToWorld(muzzleLocal.clone());
 
     return { position, direction };
@@ -211,8 +217,10 @@ export class PlayerTurret {
     this.lastFireTime = 0;
     this.recoilOffset = 0;
     this.gunGroup.visible = true;
+    if (this.aimIndicator) this.aimIndicator.style.display = 'block';
     this.updateCamera();
     this.updateGunPosition();
+    this.updateAimIndicator();
   }
 
   // For collision detection - returns a bounding sphere around player
@@ -225,13 +233,15 @@ export class PlayerTurret {
     return this.position.clone();
   }
 
-  // Hide gun (for death animation)
+  // Hide turret (for death animation)
   hideTurret(): void {
     this.gunGroup.visible = false;
+    if (this.aimIndicator) this.aimIndicator.style.display = 'none';
   }
 
-  // Show gun
+  // Show turret
   showTurret(): void {
     this.gunGroup.visible = true;
+    if (this.aimIndicator) this.aimIndicator.style.display = 'block';
   }
 }

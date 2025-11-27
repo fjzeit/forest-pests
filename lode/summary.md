@@ -231,10 +231,23 @@ touch: {
 - Rotation order: 'YXZ' (yaw, pitch, roll - standard FPS)
 - Base pitch: 0.15 radians (~8.5° up)
 
-**Turret Mesh** (solid grey 0x888888):
-- Base: Cylinder (radius 6→8, height 3)
-- Barrel: Box (2×2×12) at y=4, z=-6
-- Side panels: Two angled boxes
+**Aim Limits**:
+- Horizontal yaw limited to ±0.31 radians (~18° each way, 36° total)
+- Prevents player exploiting corners for safe shooting angles
+
+**Space Laser Cannon**:
+- Rear housing: Cylinder (0.7→0.8 radius), medium grey (0x667788)
+- Main barrel: Cylinder (0.45→0.5 radius, length 10), light grey (0x8899aa)
+- Muzzle: Cylinder (0.35→0.45 radius), glowing green (0x00ff66)
+- Positioned at camera with offset (0, -2.5, 0) - protrudes from viewer
+- Recoil animation on fire (0.08 offset, recovers at 8/s)
+
+**HUD Aim Arc** (index.html #aim-arc):
+- SVG arc at bottom of screen showing horizontal aim limits
+- Quadratic bezier path: `M 10 25 Q 100 0 190 25`
+- Green dot (r=4) travels along arc showing turret position
+- Dot movement inverted: aim left = dot moves right (shows turret relative to arc)
+- Updates via `updateAimIndicator()` using bezier formula
 
 ### Projectile (Projectile.ts)
 
@@ -423,6 +436,7 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 - `#wave-display`: Below score
 - `#health-bar-container`: Bottom center, 300px wide
 - `#crosshair`: Center, 40px circle with cross
+- `#aim-arc`: Bottom 15%, SVG arc showing horizontal aim limits with moving dot
 - `#game-message`: Center, for game state messages
 - `#start-screen`: Start screen with title and controls info
 - `#damage-overlay`: Full screen red flash
