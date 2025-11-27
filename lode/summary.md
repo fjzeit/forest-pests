@@ -479,6 +479,26 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 **InputManager.ts**:
 - Boolean flags for movement keys (avoids 8× `Set.has()` lookups per frame)
 - Flags updated on keydown/keyup events
+- On keyup, checks if alternate key still pressed before clearing flag (e.g., KeyA + ArrowLeft)
+
+## Bug Fixes (Recent)
+
+**Movement Speed Not Increasing** (Game.ts, AlienFormation.ts):
+- `onAlienKilled()` was never called when aliens died
+- `cachedAliveCount` stayed at initial value, speed multiplier always 1.0
+- Fix: Call `alienFormation.onAlienKilled()` in collision handler for each kill
+
+**Saucer Sound Issues** (AudioManager.ts, Game.ts):
+- LFO oscillator was local variable, never stopped - sound persisted indefinitely
+- Fix: Store `saucerLfo` as class field, stop and disconnect in `stopSaucerSound()`
+- Fix: Properly disconnect all audio nodes (lfo, oscillator, gain) on stop
+- Sound not stopping during intro: Added `stopSaucerSound()` to `startWaveCompleteDelay()` and `startLifeLostSequence()`
+
+**Touch Joystick Position Issues** (TouchInputManager.ts):
+- Cached DOMRects stale after show/hide/reposition
+- Fix: Call `updateCachedRects()` after repositioning ends
+- Fix: Use `requestAnimationFrame` to update cache after `show()` and `reloadPosition()`
+- Fix: Update cache in resize handler after `clampToScreen()`
 
 ## Development Commands
 

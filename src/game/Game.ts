@@ -571,7 +571,8 @@ export class Game {
         this.audioManager.playAlienDeath();
         const alienColor = hit.alien.getCurrentColor();
         this.explosionManager.createAlienExplosion(hit.position, alienColor);
-
+        // Update cached alive count for speed calculation
+        this.alienFormation.onAlienKilled();
       });
       // Update brightness for remaining aliens
       this.alienFormation.updateAlienBrightness();
