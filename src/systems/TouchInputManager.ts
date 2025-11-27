@@ -17,7 +17,7 @@ const TAP_MAX_DURATION = 200;  // ms - max time for a tap
 const TAP_MAX_DISTANCE = 15;   // px - max movement for a tap
 
 // Long press for repositioning
-const LONG_PRESS_DURATION = 500;  // ms - time to trigger long press
+const LONG_PRESS_DURATION = 3000;  // ms - time to trigger long press
 const STORAGE_KEY = 'joystickPosition';
 
 export class TouchInputManager {
