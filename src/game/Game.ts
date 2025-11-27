@@ -52,6 +52,7 @@ export class Game {
   private waveCompleteTuneTimer: number = 0;  // Auto-continue after tune
   private lifeLostTuneTimer: number = 0;      // Auto-continue after tune
   private gameTime: number = 0;  // Track game time for dive shots
+  private continueInputDelay: number = 0;  // Delay before accepting continue input
 
   // UI Elements
   private scoreElement!: HTMLElement;
@@ -86,6 +87,14 @@ export class Game {
     // Initialize touch controls on mobile
     if (this.inputManager.isMobile()) {
       this.touchInputManager = new TouchInputManager(this.inputManager);
+
+      // Try to lock orientation to landscape (CSS rotation is fallback for iOS/unsupported browsers)
+      const orientation = screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
+      if (orientation?.lock) {
+        orientation.lock('landscape').catch(() => {
+          // Silently fall back to CSS rotation
+        });
+      }
     }
 
     // Initialize CRT post-processing
@@ -148,10 +157,15 @@ export class Game {
     if (this.state === GameState.MENU) {
       e.preventDefault();
       this.startGame();
-    } else if (this.state === GameState.GAME_OVER && e.code === 'Space') {
+    } else if (this.state === GameState.GAME_OVER && this.continueInputDelay <= 0) {
+      // Any key to restart after delay
       e.preventDefault();
       this.resetGame();
       this.startGame();
+    } else if (this.state === GameState.LIFE_LOST && this.continueInputDelay <= 0) {
+      // Any key to continue after delay
+      e.preventDefault();
+      this.continueAfterLifeLost();
     }
   }
 
@@ -159,17 +173,29 @@ export class Game {
     if (this.state === GameState.MENU) {
       e.preventDefault();
       this.startGame();
-    } else if (this.state === GameState.GAME_OVER) {
+    } else if (this.state === GameState.GAME_OVER && this.continueInputDelay <= 0) {
       e.preventDefault();
       this.resetGame();
       this.startGame();
+    } else if (this.state === GameState.LIFE_LOST && this.continueInputDelay <= 0) {
+      e.preventDefault();
+      this.continueAfterLifeLost();
     }
   }
 
   private handleClick(): void {
-    if (this.state === GameState.PLAYING && !this.inputManager.isMobile()) {
+    if (this.state === GameState.MENU) {
+      this.startGame();
+    } else if (this.state === GameState.PLAYING && !this.inputManager.isMobile()) {
       // Request pointer lock for mouse control (desktop only)
       document.body.requestPointerLock();
+    } else if (this.state === GameState.GAME_OVER && this.continueInputDelay <= 0) {
+      // Click to restart after delay (desktop)
+      this.resetGame();
+      this.startGame();
+    } else if (this.state === GameState.LIFE_LOST && this.continueInputDelay <= 0) {
+      // Click to continue after delay (desktop)
+      this.continueAfterLifeLost();
     }
   }
 
@@ -337,10 +363,19 @@ export class Game {
         this.nextWave();
       }
     } else if (this.state === GameState.LIFE_LOST) {
+      // Countdown input delay
+      if (this.continueInputDelay > 0) {
+        this.continueInputDelay -= deltaTime;
+      }
       // Auto-continue after tune plays
       this.lifeLostTuneTimer -= deltaTime;
       if (this.lifeLostTuneTimer <= 0) {
         this.continueAfterLifeLost();
+      }
+    } else if (this.state === GameState.GAME_OVER) {
+      // Countdown input delay
+      if (this.continueInputDelay > 0) {
+        this.continueInputDelay -= deltaTime;
       }
     } else if (this.state === GameState.INVASION_LANDING) {
       // Update the alien landing animation
@@ -579,8 +614,9 @@ export class Game {
 
   private showLifeLost(): void {
     this.state = GameState.LIFE_LOST;
-    this.showMessage('LIFE LOST', '');
+    this.showMessage('LIFE LOST');
     this.lifeLostTuneTimer = 5.0; // Auto-continue after tune (~5 seconds)
+    this.continueInputDelay = 1.0; // 1 second delay before accepting input
   }
 
   private continueAfterLifeLost(): void {
@@ -626,8 +662,8 @@ export class Game {
     this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
     this.projectiles = [];
 
-    const restartText = this.inputManager.isMobile() ? 'TAP TO RESTART' : 'PRESS SPACE TO RESTART';
-    this.showMessage('GAME OVER', `SCORE: ${this.score}`, restartText);
+    this.showMessage('GAME OVER', `SCORE: ${this.score}`);
+    this.continueInputDelay = 1.5; // 1.5 second delay before accepting input
   }
 
   private showMessage(title: string, info?: string, prompt?: string): void {

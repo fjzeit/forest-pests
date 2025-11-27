@@ -6,6 +6,8 @@ export class SceneManager {
   public camera: THREE.PerspectiveCamera;
   public renderer: THREE.WebGLRenderer;
   private container: HTMLElement;
+  private lastWidth = 0;
+  private lastHeight = 0;
 
   constructor() {
     // Get game container
@@ -15,11 +17,12 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(GameConfig.visual.backgroundColor);
 
-    // Get container dimensions (use fallback if not ready yet - common in PWA)
-    let width = this.container.clientWidth || window.innerWidth;
-    let height = this.container.clientHeight || window.innerHeight;
+    // Get effective dimensions (accounts for CSS rotation on mobile portrait)
+    const { width, height } = this.getEffectiveDimensions();
+    this.lastWidth = width;
+    this.lastHeight = height;
 
-    // Create camera with reference aspect ratio initially
+    // Create camera with correct aspect ratio
     this.camera = new THREE.PerspectiveCamera(
       GameConfig.visual.fov,
       width / height,
@@ -71,8 +74,20 @@ export class SceneManager {
     // Create star field background
     this.createStarField();
 
-    // Handle window resize
+    // Handle window resize and orientation change
     window.addEventListener('resize', () => this.onWindowResize());
+    window.addEventListener('orientationchange', () => {
+      // Delay to let the browser complete the orientation change
+      setTimeout(() => this.onWindowResize(), 100);
+      setTimeout(() => this.onWindowResize(), 300);
+    });
+    // Modern screen orientation API
+    if (screen.orientation) {
+      screen.orientation.addEventListener('change', () => {
+        setTimeout(() => this.onWindowResize(), 100);
+        setTimeout(() => this.onWindowResize(), 300);
+      });
+    }
   }
 
   private createForestGround(): void {
@@ -195,18 +210,47 @@ export class SceneManager {
   }
 
   private onWindowResize(): void {
-    const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || window.innerHeight;
+    const { width, height } = this.getEffectiveDimensions();
 
     // Skip if dimensions are still invalid
     if (width <= 0 || height <= 0) return;
 
+    this.lastWidth = width;
+    this.lastHeight = height;
     this.adjustFovForAspect(width / height);
     this.renderer.setSize(width, height);
   }
 
   public render(): void {
+    // Check for dimension changes each frame (handles orientation changes reliably)
+    let { width, height } = this.getEffectiveDimensions();
+    if (width !== this.lastWidth || height !== this.lastHeight) {
+      this.lastWidth = width;
+      this.lastHeight = height;
+      if (width > 0 && height > 0) {
+        this.adjustFovForAspect(width / height);
+        this.renderer.setSize(width, height);
+      }
+    }
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // Get effective dimensions, accounting for CSS rotation on mobile portrait
+  private getEffectiveDimensions(): { width: number; height: number } {
+    let width = this.container.clientWidth || window.innerWidth;
+    let height = this.container.clientHeight || window.innerHeight;
+
+    // On mobile in portrait, CSS rotates the view 90 degrees
+    // We need to swap dimensions to match what the user sees
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isPhysicalPortrait = window.innerWidth < window.innerHeight;
+
+    if (isMobile && isPhysicalPortrait) {
+      // CSS is rotating the view - swap dimensions
+      [width, height] = [height, width];
+    }
+
+    return { width, height };
   }
 
   // Force recalculation of viewport/FOV (call on game start for PWA)
