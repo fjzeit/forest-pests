@@ -443,6 +443,7 @@ export class AudioManager {
 
   // Flying saucer sound for wave intro
   private saucerOscillator: OscillatorNode | null = null;
+  private saucerLfo: OscillatorNode | null = null;
   private saucerGain: GainNode | null = null;
 
   startSaucerSound(): void {
@@ -453,19 +454,18 @@ export class AudioManager {
       this.audioContext.resume().then(() => {
         this.startSaucerSoundNow();
       });
-    } else if (this.audioContext.state === 'running') {
+    } else {
       this.startSaucerSoundNow();
     }
-    // If state is 'closed', do nothing
   }
 
   private startSaucerSoundNow(): void {
-    if (!this.audioContext) return;
+    if (!this.audioContext || this.audioContext.state !== 'running') return;
     this.stopSaucerSound();
 
     // Create warbling UFO sound
     this.saucerOscillator = this.audioContext.createOscillator();
-    const lfo = this.audioContext.createOscillator();
+    this.saucerLfo = this.audioContext.createOscillator();
     const lfoGain = this.audioContext.createGain();
     this.saucerGain = this.audioContext.createGain();
 
@@ -474,12 +474,12 @@ export class AudioManager {
     this.saucerOscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
 
     // LFO to modulate the frequency (creates warble)
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(8, this.audioContext.currentTime); // Warble speed
+    this.saucerLfo.type = 'sine';
+    this.saucerLfo.frequency.setValueAtTime(8, this.audioContext.currentTime); // Warble speed
     lfoGain.gain.setValueAtTime(50, this.audioContext.currentTime); // Warble depth
 
     // Connect LFO to main oscillator frequency
-    lfo.connect(lfoGain);
+    this.saucerLfo.connect(lfoGain);
     lfoGain.connect(this.saucerOscillator.frequency);
 
     // Volume
@@ -490,18 +490,29 @@ export class AudioManager {
     this.saucerGain.connect(this.audioContext.destination);
 
     // Start
-    lfo.start();
+    this.saucerLfo.start();
     this.saucerOscillator.start();
   }
 
   stopSaucerSound(): void {
+    if (this.saucerLfo) {
+      try {
+        this.saucerLfo.stop();
+        this.saucerLfo.disconnect();
+      } catch (e) {}
+      this.saucerLfo = null;
+    }
     if (this.saucerOscillator) {
       try {
         this.saucerOscillator.stop();
+        this.saucerOscillator.disconnect();
       } catch (e) {}
       this.saucerOscillator = null;
     }
     if (this.saucerGain) {
+      try {
+        this.saucerGain.disconnect();
+      } catch (e) {}
       this.saucerGain = null;
     }
   }

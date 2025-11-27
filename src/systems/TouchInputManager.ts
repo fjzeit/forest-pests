@@ -77,11 +77,14 @@ export class TouchInputManager {
     this.boundResizeHandler = () => {
       this.invalidateCachedRects();
       this.clampToScreen();
+      this.updateCachedRects();
     };
     window.addEventListener('resize', this.boundResizeHandler);
 
-    // Initialize cached rects
-    this.updateCachedRects();
+    // Initialize cached rects after DOM has updated
+    requestAnimationFrame(() => {
+      this.updateCachedRects();
+    });
   }
 
   // Update cached DOMRects (call after resize or repositioning)
@@ -342,6 +345,8 @@ export class TouchInputManager {
         // End repositioning - save position and remove visual feedback
         this.savePosition();
         this.joystickZone.classList.remove('repositioning');
+        // Refresh cached rects with new position
+        this.updateCachedRects();
       } else {
         // Check if this was a tap (fire) or drag (movement)
         // Use distance from TOUCH START, not joystick center
@@ -449,10 +454,18 @@ export class TouchInputManager {
   // Public methods
   reloadPosition(): void {
     this.loadSavedPosition();
+    // Refresh cached rects after position change
+    requestAnimationFrame(() => {
+      this.updateCachedRects();
+    });
   }
 
   show(): void {
     this.touchControls.classList.remove('hidden');
+    // Refresh cached rects after becoming visible
+    requestAnimationFrame(() => {
+      this.updateCachedRects();
+    });
   }
 
   hide(): void {

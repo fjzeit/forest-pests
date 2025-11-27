@@ -69,11 +69,16 @@ export class InputManager {
 
   private onKeyUp(e: KeyboardEvent): void {
     this.keys.delete(e.code);
-    // Update cached movement flags
-    if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.moveLeft = false;
-    else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.moveRight = false;
-    else if (e.code === 'KeyW' || e.code === 'ArrowUp') this.moveUp = false;
-    else if (e.code === 'KeyS' || e.code === 'ArrowDown') this.moveDown = false;
+    // Update cached movement flags - only clear if alternate key isn't still pressed
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
+      this.moveLeft = this.keys.has('KeyA') || this.keys.has('ArrowLeft');
+    } else if (e.code === 'KeyD' || e.code === 'ArrowRight') {
+      this.moveRight = this.keys.has('KeyD') || this.keys.has('ArrowRight');
+    } else if (e.code === 'KeyW' || e.code === 'ArrowUp') {
+      this.moveUp = this.keys.has('KeyW') || this.keys.has('ArrowUp');
+    } else if (e.code === 'KeyS' || e.code === 'ArrowDown') {
+      this.moveDown = this.keys.has('KeyS') || this.keys.has('ArrowDown');
+    }
   }
 
   private onMouseMove(e: MouseEvent): void {
