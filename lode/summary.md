@@ -286,11 +286,12 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 - Joystick uses deadzone (0.1) and clamps to radius
 
 **Joystick Repositioning**:
-- Long-press (500ms) on joystick to enter reposition mode
+- Long-press (3 seconds) on joystick to enter reposition mode
 - Drag to move joystick anywhere on screen
 - Position saved to localStorage as percentage
 - Persists across sessions
 - Clamped to screen bounds on resize
+- Instructions shown on mobile start screen
 
 ## Audio System (AudioManager.ts)
 
