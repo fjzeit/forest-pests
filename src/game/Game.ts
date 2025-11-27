@@ -12,6 +12,25 @@ import { CRTEffect } from '../rendering/shaders/CRTEffect';
 import { AudioManager } from '../systems/AudioManager';
 import { ExplosionManager } from '../rendering/ExplosionEffect';
 
+// WebKit compatibility for pointer lock
+const requestPointerLock = (element: HTMLElement): void => {
+  const el = element as HTMLElement & { webkitRequestPointerLock?: () => void };
+  if (element.requestPointerLock) {
+    element.requestPointerLock();
+  } else if (el.webkitRequestPointerLock) {
+    el.webkitRequestPointerLock();
+  }
+};
+
+const exitPointerLock = (): void => {
+  const doc = document as Document & { webkitExitPointerLock?: () => void };
+  if (document.exitPointerLock) {
+    document.exitPointerLock();
+  } else if (doc.webkitExitPointerLock) {
+    doc.webkitExitPointerLock();
+  }
+};
+
 export enum GameState {
   MENU,
   PLAYING,
@@ -213,9 +232,15 @@ export class Game {
   private handleClick(): void {
     if (this.state === GameState.MENU) {
       this.startGame();
-    } else if (this.state === GameState.PLAYING && !this.inputManager.isMobile()) {
-      // Request pointer lock for mouse control (desktop only)
-      document.body.requestPointerLock();
+    } else if (this.state === GameState.PLAYING &&
+               (!this.inputManager.isMobile() || this.inputManager.useExternalInput())) {
+      // Request pointer lock for mouse control (desktop or mobile with external input)
+      requestPointerLock(document.body);
+      // Hide touch controls when switching to mouse on mobile
+      if (this.inputManager.isMobile()) {
+        this.touchInputManager?.hide();
+        this.crosshair.style.display = 'block';
+      }
     } else if (this.state === GameState.GAME_OVER && this.continueInputDelay <= 0) {
       // Click to restart after delay (desktop)
       this.resetGame();
@@ -235,13 +260,17 @@ export class Game {
     this.messageElement.style.display = 'none';
     this.crosshair.style.display = 'block';
 
-    if (this.inputManager.isMobile()) {
-      // Mobile: request fullscreen and show touch controls
+    if (this.inputManager.isMobile() && !this.inputManager.useExternalInput()) {
+      // Pure mobile: request fullscreen and show touch controls
       this.requestFullscreen();
       this.touchInputManager?.show();
     } else {
-      // Desktop: request pointer lock
-      document.body.requestPointerLock();
+      // Desktop OR mobile with external input: request pointer lock
+      requestPointerLock(document.body);
+      if (this.inputManager.isMobile()) {
+        // Mobile with external input: hide touch controls
+        this.touchInputManager?.hide();
+      }
     }
 
     // Recalculate viewport/FOV now that game is starting (fixes PWA issues)
@@ -659,12 +688,15 @@ export class Game {
     // Restart march
     this.audioManager.startMarch();
 
-    if (this.inputManager.isMobile()) {
-      // Mobile: show touch controls
+    if (this.inputManager.isMobile() && !this.inputManager.useExternalInput()) {
+      // Pure mobile: show touch controls
       this.touchInputManager?.show();
     } else {
-      // Desktop: request pointer lock
-      document.body.requestPointerLock();
+      // Desktop OR mobile with external input: request pointer lock
+      requestPointerLock(document.body);
+      if (this.inputManager.isMobile()) {
+        this.touchInputManager?.hide();
+      }
     }
 
     this.updateUI();
@@ -682,7 +714,7 @@ export class Game {
       this.touchInputManager?.hide();
     } else {
       // Desktop: exit pointer lock
-      document.exitPointerLock();
+      exitPointerLock();
     }
 
     // Clear all projectiles

@@ -1,3 +1,9 @@
+// WebKit compatibility for pointer lock
+const getPointerLockElement = (): Element | null => {
+  const doc = document as Document & { webkitPointerLockElement?: Element };
+  return document.pointerLockElement || doc.webkitPointerLockElement || null;
+};
+
 export class InputManager {
   private keys: Set<string> = new Set();
   private mouseMovement = { x: 0, y: 0 };
@@ -6,6 +12,7 @@ export class InputManager {
 
   // Mobile/touch support
   private _isMobile: boolean;
+  private _useExternalInput = false;  // True when mouse/keyboard detected on mobile
   private touchMoveInput = { x: 0, y: 0 };
   private touchAimDelta = { x: 0, y: 0 };
 
@@ -23,14 +30,28 @@ export class InputManager {
     document.addEventListener('mousedown', (e) => this.onMouseDown(e));
     document.addEventListener('mouseup', (e) => this.onMouseUp(e));
 
-    // Pointer lock change
+    // Pointer lock change (with WebKit prefix)
     document.addEventListener('pointerlockchange', () => this.onPointerLockChange());
+    document.addEventListener('webkitpointerlockchange', () => this.onPointerLockChange());
+
+    // On mobile, detect external mouse/keyboard and allow switching to pointer lock mode
+    if (this._isMobile) {
+      document.addEventListener('mousemove', (e) => this.onExternalMouseDetected(e), { once: true });
+    }
+  }
+
+  private onExternalMouseDetected(e: MouseEvent): void {
+    // Only trigger if there's actual mouse movement (not a touch-simulated event)
+    // Touch-simulated mouse events typically have zero movement values
+    if (e.movementX !== 0 || e.movementY !== 0) {
+      this._useExternalInput = true;
+    }
   }
 
   private onKeyDown(e: KeyboardEvent): void {
     this.keys.add(e.code);
     // Space bar to fire (when pointer locked)
-    if (e.code === 'Space' && document.pointerLockElement) {
+    if (e.code === 'Space' && getPointerLockElement()) {
       this.fireQueue = 1;
     }
   }
@@ -40,7 +61,7 @@ export class InputManager {
   }
 
   private onMouseMove(e: MouseEvent): void {
-    if (document.pointerLockElement) {
+    if (getPointerLockElement()) {
       this.mouseMovement.x += e.movementX;
       this.mouseMovement.y += e.movementY;
     }
@@ -49,7 +70,7 @@ export class InputManager {
   private onMouseDown(e: MouseEvent): void {
     this.mouseButtons.add(e.button);
     // Trigger single shot on click
-    if (e.button === 0 && document.pointerLockElement) {
+    if (e.button === 0 && getPointerLockElement()) {
       this.fireQueue = 1;
     }
   }
@@ -59,7 +80,7 @@ export class InputManager {
   }
 
   private onPointerLockChange(): void {
-    if (!document.pointerLockElement) {
+    if (!getPointerLockElement()) {
       // Reset state when pointer lock is lost
       this.keys.clear();
       this.mouseButtons.clear();
@@ -130,12 +151,17 @@ export class InputManager {
   }
 
   isPointerLocked(): boolean {
-    return document.pointerLockElement !== null;
+    return getPointerLockElement() !== null;
   }
 
   // Mobile detection
   isMobile(): boolean {
     return this._isMobile;
+  }
+
+  // External input detection (mouse/keyboard on mobile device)
+  useExternalInput(): boolean {
+    return this._useExternalInput;
   }
 
   // Touch input injection methods (called by TouchInputManager)
