@@ -8,6 +8,9 @@ export class SceneManager {
   private container: HTMLElement;
   private lastWidth = 0;
   private lastHeight = 0;
+  // Debounce resize handling
+  private resizeTimeout: number | null = null;
+  private readonly RESIZE_DEBOUNCE_MS = 100;
 
   constructor() {
     // Get game container
@@ -74,18 +77,18 @@ export class SceneManager {
     // Create star field background
     this.createStarField();
 
-    // Handle window resize and orientation change
-    window.addEventListener('resize', () => this.onWindowResize());
+    // Handle window resize and orientation change (debounced)
+    window.addEventListener('resize', () => this.debouncedResize());
     window.addEventListener('orientationchange', () => {
       // Delay to let the browser complete the orientation change
-      setTimeout(() => this.onWindowResize(), 100);
-      setTimeout(() => this.onWindowResize(), 300);
+      this.debouncedResize(100);
+      this.debouncedResize(300);
     });
     // Modern screen orientation API
     if (screen.orientation) {
       screen.orientation.addEventListener('change', () => {
-        setTimeout(() => this.onWindowResize(), 100);
-        setTimeout(() => this.onWindowResize(), 300);
+        this.debouncedResize(100);
+        this.debouncedResize(300);
       });
     }
   }
@@ -207,6 +210,18 @@ export class SceneManager {
     this.camera.fov = newFov;
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+  }
+
+  // Debounced resize to avoid excessive recalculations during window drag
+  private debouncedResize(additionalDelay: number = 0): void {
+    if (this.resizeTimeout !== null) {
+      clearTimeout(this.resizeTimeout);
+    }
+    const delay = this.RESIZE_DEBOUNCE_MS + additionalDelay;
+    this.resizeTimeout = window.setTimeout(() => {
+      this.resizeTimeout = null;
+      this.onWindowResize();
+    }, delay);
   }
 
   private onWindowResize(): void {

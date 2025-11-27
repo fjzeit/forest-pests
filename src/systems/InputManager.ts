@@ -10,6 +10,12 @@ export class InputManager {
   private mouseButtons: Set<number> = new Set();
   private fireQueue: number = 0;  // Number of shots queued
 
+  // Cached movement flags (avoid Set.has lookups every frame)
+  private moveLeft = false;
+  private moveRight = false;
+  private moveUp = false;
+  private moveDown = false;
+
   // Mobile/touch support
   private _isMobile: boolean;
   private _useExternalInput = false;  // True when mouse/keyboard detected on mobile
@@ -50,14 +56,24 @@ export class InputManager {
 
   private onKeyDown(e: KeyboardEvent): void {
     this.keys.add(e.code);
+    // Update cached movement flags
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.moveLeft = true;
+    else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.moveRight = true;
+    else if (e.code === 'KeyW' || e.code === 'ArrowUp') this.moveUp = true;
+    else if (e.code === 'KeyS' || e.code === 'ArrowDown') this.moveDown = true;
     // Space bar to fire (when pointer locked)
-    if (e.code === 'Space' && getPointerLockElement()) {
+    else if (e.code === 'Space' && getPointerLockElement()) {
       this.fireQueue = 1;
     }
   }
 
   private onKeyUp(e: KeyboardEvent): void {
     this.keys.delete(e.code);
+    // Update cached movement flags
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.moveLeft = false;
+    else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.moveRight = false;
+    else if (e.code === 'KeyW' || e.code === 'ArrowUp') this.moveUp = false;
+    else if (e.code === 'KeyS' || e.code === 'ArrowDown') this.moveDown = false;
   }
 
   private onMouseMove(e: MouseEvent): void {
@@ -85,6 +101,11 @@ export class InputManager {
       this.keys.clear();
       this.mouseButtons.clear();
       this.fireQueue = 0;
+      // Reset cached movement flags
+      this.moveLeft = false;
+      this.moveRight = false;
+      this.moveUp = false;
+      this.moveDown = false;
     }
   }
 
@@ -120,14 +141,14 @@ export class InputManager {
       return { x: this.touchMoveInput.x, y: this.touchMoveInput.y };
     }
 
-    // Desktop keyboard input
+    // Desktop keyboard input - use cached flags instead of Set.has()
     let x = 0;
     let y = 0;
 
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1;
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) y += 1;
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) y -= 1;
+    if (this.moveLeft) x -= 1;
+    if (this.moveRight) x += 1;
+    if (this.moveUp) y += 1;
+    if (this.moveDown) y -= 1;
 
     return { x, y };
   }

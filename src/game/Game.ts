@@ -85,6 +85,13 @@ export class Game {
   private uiOverlay!: HTMLElement;
   private healthBar!: HTMLElement;
   private rotateOverlay!: HTMLElement;
+  // Cached life icons to avoid querySelectorAll each frame
+  private lifeIcons: Element[] = [];
+  // Previous values for dirty checking
+  private lastDisplayedScore: number = -1;
+  private lastDisplayedWave: number = -1;
+  private lastDisplayedHealth: number = -1;
+  private lastDisplayedLives: number = -1;
 
   // Orientation tracking
   private orientationLocked = false;
@@ -102,6 +109,8 @@ export class Game {
     this.damageOverlay = document.getElementById('damage-overlay')!;
     this.uiOverlay = document.getElementById('ui-overlay')!;
     this.healthBar = document.getElementById('health-bar')!;
+    // Cache life icons once at init
+    this.lifeIcons = Array.from(this.livesElement.querySelectorAll('.life-icon'));
 
     // Initialize systems
     this.sceneManager = new SceneManager();
@@ -635,6 +644,7 @@ export class Game {
   private startWaveCompleteDelay(): void {
     this.state = GameState.WAVE_COMPLETE_DELAY;
     this.audioManager.stopMarch();
+    this.audioManager.stopSaucerSound(); // Stop intro sound if still playing
     this.waveCompleteDelayTimer = 1.0; // 1 second delay for explosion to finish
 
     // Clear all projectiles
@@ -652,6 +662,7 @@ export class Game {
   private startLifeLostSequence(): void {
     this.state = GameState.LIFE_LOST_DELAY;
     this.audioManager.stopMarch();
+    this.audioManager.stopSaucerSound(); // Stop intro sound if still playing
 
     // Explode the turret
     const turretPos = this.player.getTurretPosition();
@@ -757,21 +768,40 @@ export class Game {
   }
 
   private updateUI(): void {
-    this.scoreElement.textContent = this.score.toString();
-    // Update life icons
-    const lifeIcons = this.livesElement.querySelectorAll('.life-icon');
-    lifeIcons.forEach((icon, index) => {
-      if (index < this.lives) {
-        icon.classList.remove('spent');
-      } else {
-        icon.classList.add('spent');
+    // Only update score if changed
+    if (this.score !== this.lastDisplayedScore) {
+      this.scoreElement.textContent = this.score.toString();
+      this.lastDisplayedScore = this.score;
+    }
+
+    // Only update life icons if lives changed
+    if (this.lives !== this.lastDisplayedLives) {
+      for (let i = 0; i < this.lifeIcons.length; i++) {
+        if (i < this.lives) {
+          this.lifeIcons[i].classList.remove('spent');
+        } else {
+          this.lifeIcons[i].classList.add('spent');
+        }
       }
-    });
-    this.waveElement.textContent = this.wave.toString();
+      this.lastDisplayedLives = this.lives;
+    }
+
+    // Only update wave if changed
+    if (this.wave !== this.lastDisplayedWave) {
+      this.waveElement.textContent = this.wave.toString();
+      this.lastDisplayedWave = this.wave;
+    }
+
     this.updateHealthBar();
   }
 
   private updateHealthBar(): void {
+    // Only update if health changed
+    if (this.currentHealth === this.lastDisplayedHealth) {
+      return;
+    }
+    this.lastDisplayedHealth = this.currentHealth;
+
     const maxHealth = GameConfig.gameplay.hitsPerLife;
     const healthPercent = (this.currentHealth / maxHealth) * 100;
     this.healthBar.style.width = `${healthPercent}%`;

@@ -320,6 +320,11 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 | `playPlayerHit()` | Disabled | Too noisy |
 | `startSaucerSound()` | Enabled | UFO warble (sine + LFO modulation) |
 
+**Saucer Sound State Management**:
+- Started: `startGame()`, `nextWave()` (wave intro), `startInvasionLanding()`
+- Stopped: Wave intro complete, `startWaveCompleteDelay()`, `startLifeLostSequence()`, `gameOver()`
+- Critical: Must stop on all state transitions out of intro to prevent sound persisting
+
 ## Explosion System (ExplosionEffect.ts)
 
 **Alien Explosion** (`createAlienExplosion()`):
@@ -341,6 +346,12 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 3. 15 orange fire particles (0xff4400, upward bias)
 
 **Key Method**: `hasActiveParticles()` - Used to wait for explosions before showing messages
+
+**Object Pooling**:
+- Pre-allocates meshes: 80 box, 120 debris, 20 sphere particles
+- `acquireFromPool()` / `releaseToPool()` avoid allocation during gameplay
+- Shared geometries and materials across pool
+- `dispose()` method for cleanup
 
 ## Rendering (SceneManager.ts, CRTEffect.ts)
 
@@ -430,6 +441,44 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 | 50   | 2 hits              | 2.75%           | 1.5-4s        | 3          |
 | 75   | 1-2 hits            | 3.9%            | 1.1-2.8s      | 4          |
 | 100  | 1 hit               | 5%              | 0.8-2s        | 5          |
+
+## Performance Optimizations
+
+**Collision Detection** (CollisionSystem.ts, Alien.ts, Projectile.ts):
+- Bounding spheres cached with dirty flags (recalculated only on position change)
+- Squared distance comparisons (`distanceToSquared`) avoid expensive sqrt operations
+- Temp vectors reused to reduce garbage collection pressure
+
+**AlienFormation.ts**:
+- Cached alive count updated on kill (avoids `.filter().length` each frame)
+- Brightness update uses dirty flag (only recalculates when aliens die)
+- `for-of` loops instead of `forEach` (avoids callback overhead)
+- Pre-calculated `totalWidth` and `halfWidth` constants
+
+**Shield.ts**:
+- Static readonly color constants (avoid creating Color objects per cell)
+- Cached world positions on each HexCell
+- Cached bounding box (position never changes)
+- Color state tracking (only updates GPU buffer when state changes)
+
+**AudioManager.ts**:
+- Web Audio API native scheduling via `playToneAt()` method
+- `playSequence()` helper schedules all notes at once
+- Eliminates 40-50 setTimeout calls per audio sequence
+
+**DOM Optimizations** (TouchInputManager.ts, Game.ts):
+- Cached DOMRect values with lazy invalidation on resize/reposition
+- Cached zone dimensions for repositioning calculations
+- `destroy()` method removes event listeners
+- Cached life icon elements (avoids `querySelectorAll` each frame)
+- Dirty checking for score/wave/health/lives (only updates DOM when changed)
+
+**SceneManager.ts**:
+- Debounced resize handler (100ms) prevents excessive recalculations during window drag
+
+**InputManager.ts**:
+- Boolean flags for movement keys (avoids 8× `Set.has()` lookups per frame)
+- Flags updated on keydown/keyup events
 
 ## Development Commands
 

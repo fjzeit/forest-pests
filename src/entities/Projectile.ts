@@ -17,6 +17,10 @@ export class Projectile {
   private velocity: THREE.Vector3;
   private time: number = 0;
 
+  // Cached bounding sphere and temp vector for updates
+  private cachedSphere: THREE.Sphere;
+  private tempMovement: THREE.Vector3 = new THREE.Vector3();
+
   constructor(
     position: THREE.Vector3,
     direction: THREE.Vector3,
@@ -61,14 +65,18 @@ export class Projectile {
       : GameConfig.projectiles.alienSpeed;
 
     this.velocity = direction.clone().multiplyScalar(speed);
+
+    // Initialize cached bounding sphere
+    const radius = isPlayer ? 0.5 : 0.7;
+    this.cachedSphere = new THREE.Sphere(this.mesh.position, radius);
   }
 
   update(deltaTime: number): void {
     this.time += deltaTime;
 
-    // Apply velocity - all shots travel straight (no lateral deviation)
-    const movement = this.velocity.clone().multiplyScalar(deltaTime);
-    this.mesh.position.add(movement);
+    // Apply velocity using reusable temp vector (avoids allocation)
+    this.tempMovement.copy(this.velocity).multiplyScalar(deltaTime);
+    this.mesh.position.add(this.tempMovement);
 
     // Rotate for visual effect (alien shots)
     if (this.type === ProjectileType.ALIEN) {
@@ -78,12 +86,12 @@ export class Projectile {
   }
 
   getPosition(): THREE.Vector3 {
-    return this.mesh.position.clone();
+    return this.mesh.position;  // Return reference, not clone
   }
 
   getBoundingSphere(): THREE.Sphere {
-    const radius = this.type === ProjectileType.PLAYER ? 0.5 : 0.7;
-    return new THREE.Sphere(this.mesh.position.clone(), radius);
+    // Sphere center references mesh.position, so it's always up to date
+    return this.cachedSphere;
   }
 
   isOutOfBounds(): boolean {
@@ -96,9 +104,11 @@ export class Projectile {
              pos.y > 150 ||
              pos.y < 0;
     } else {
+      // Avoid Math.abs - use direct comparison
       return pos.z > 50 ||
              pos.y < 0 ||
-             Math.abs(pos.x) > 150;
+             pos.x > 150 ||
+             pos.x < -150;
     }
   }
 

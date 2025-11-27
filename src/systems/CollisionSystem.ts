@@ -50,15 +50,18 @@ export class CollisionSystem {
     shields: Shield[],
     result: CollisionResult
   ): void {
-    // Check against aliens
+    // Check against aliens using squared distance (avoids sqrt)
     const aliens = alienFormation.getAllAliens();
     for (const alien of aliens) {
       if (!alien.alive) continue;
 
       const alienSphere = alien.getBoundingSphere();
-      if (sphere.center.distanceTo(alienSphere.center) < sphere.radius + alienSphere.radius) {
+      const radiusSum = sphere.radius + alienSphere.radius;
+      const radiusSumSq = radiusSum * radiusSum;
+      // Use distanceToSquared to avoid sqrt calculation
+      if (sphere.center.distanceToSquared(alienSphere.center) < radiusSumSq) {
         // Hit!
-        const hitPos = alien.getPosition();
+        const hitPos = alien.getPosition().clone();  // Clone needed here since we store it
         alien.hide();
         result.alienHits.push({ alien, points: alien.points, position: hitPos });
         result.destroyedProjectiles.push(projectile);
@@ -102,15 +105,15 @@ export class CollisionSystem {
       }
     }
 
-    // Check against player - use horizontal distance only (infinite vertical hit area)
+    // Check against player - use horizontal squared distance (avoids sqrt)
     const playerPos = player.getPosition();
-    const horizontalDist = Math.sqrt(
-      Math.pow(pos.x - playerPos.x, 2) +
-      Math.pow(pos.z - playerPos.z, 2)
-    );
-    const hitRadius = 8; // Horizontal hit radius
+    const dx = pos.x - playerPos.x;
+    const dz = pos.z - playerPos.z;
+    const horizontalDistSq = dx * dx + dz * dz;
+    const hitRadius = 8 + sphere.radius;
+    const hitRadiusSq = hitRadius * hitRadius;
 
-    if (horizontalDist < hitRadius + sphere.radius) {
+    if (horizontalDistSq < hitRadiusSq) {
       result.playerHit = true;
       result.destroyedProjectiles.push(projectile);
       return;

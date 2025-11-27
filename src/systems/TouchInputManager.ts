@@ -48,6 +48,16 @@ export class TouchInputManager {
   private lastAimX = 0;
   private lastAimY = 0;
 
+  // Cached DOMRects for performance (updated on resize/reposition)
+  private cachedBaseRect: DOMRect | null = null;
+  private cachedZoneRect: DOMRect | null = null;
+  // Cached zone dimensions (don't change during repositioning)
+  private zoneWidth: number = 0;
+  private zoneHeight: number = 0;
+
+  // Bound event handlers for cleanup
+  private boundResizeHandler: () => void;
+
   constructor(inputManager: InputManager) {
     this.inputManager = inputManager;
     this.joystickRadius = GameConfig.touch.joystickSize / 2;
@@ -64,7 +74,45 @@ export class TouchInputManager {
     this.loadSavedPosition();
 
     // Ensure joystick stays on screen after resize
-    window.addEventListener('resize', () => this.clampToScreen());
+    this.boundResizeHandler = () => {
+      this.invalidateCachedRects();
+      this.clampToScreen();
+    };
+    window.addEventListener('resize', this.boundResizeHandler);
+
+    // Initialize cached rects
+    this.updateCachedRects();
+  }
+
+  // Update cached DOMRects (call after resize or repositioning)
+  private updateCachedRects(): void {
+    this.cachedBaseRect = this.joystickBase.getBoundingClientRect();
+    this.cachedZoneRect = this.joystickZone.getBoundingClientRect();
+    // Cache dimensions separately (they don't change during repositioning)
+    this.zoneWidth = this.cachedZoneRect.width;
+    this.zoneHeight = this.cachedZoneRect.height;
+  }
+
+  // Invalidate cache (triggers lazy update on next use)
+  private invalidateCachedRects(): void {
+    this.cachedBaseRect = null;
+    this.cachedZoneRect = null;
+  }
+
+  // Get cached base rect (updates if needed)
+  private getBaseRect(): DOMRect {
+    if (!this.cachedBaseRect) {
+      this.cachedBaseRect = this.joystickBase.getBoundingClientRect();
+    }
+    return this.cachedBaseRect;
+  }
+
+  // Get cached zone rect (updates if needed)
+  private getZoneRect(): DOMRect {
+    if (!this.cachedZoneRect) {
+      this.cachedZoneRect = this.joystickZone.getBoundingClientRect();
+    }
+    return this.cachedZoneRect;
   }
 
   private loadSavedPosition(): void {
@@ -84,6 +132,8 @@ export class TouchInputManager {
     this.joystickZone.style.setProperty('bottom', 'auto', 'important');
     this.joystickZone.style.setProperty('left', `${leftPercent}%`, 'important');
     this.joystickZone.style.setProperty('top', `${topPercent}%`, 'important');
+    // Invalidate cached rects after position change
+    this.invalidateCachedRects();
   }
 
   private savePosition(): void {
@@ -97,7 +147,7 @@ export class TouchInputManager {
 
   // Ensure joystick stays within screen bounds after resize
   private clampToScreen(): void {
-    const rect = this.joystickZone.getBoundingClientRect();
+    const rect = this.getZoneRect();
     const maxLeft = window.innerWidth - rect.width;
     const maxTop = window.innerHeight - rect.height;
 
@@ -152,8 +202,8 @@ export class TouchInputManager {
     if (this.joystickTouch) return; // Already tracking a touch
 
     const touch = e.changedTouches[0];
-    const rect = this.joystickBase.getBoundingClientRect();
-    const zoneRect = this.joystickZone.getBoundingClientRect();
+    const rect = this.getBaseRect();
+    const zoneRect = this.getZoneRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
 
@@ -222,15 +272,13 @@ export class TouchInputManager {
   }
 
   private moveJoystickTo(touchX: number, touchY: number): void {
-    const zoneRect = this.joystickZone.getBoundingClientRect();
-
     // Calculate new position, accounting for the offset from touch to zone corner
     let newLeft = touchX - this.repositionOffset.x;
     let newTop = touchY - this.repositionOffset.y;
 
-    // Clamp to screen bounds (physical)
-    const maxLeft = window.innerWidth - zoneRect.width;
-    const maxTop = window.innerHeight - zoneRect.height;
+    // Clamp to screen bounds using cached dimensions (avoids getBoundingClientRect)
+    const maxLeft = window.innerWidth - this.zoneWidth;
+    const maxTop = window.innerHeight - this.zoneHeight;
     newLeft = Math.max(0, Math.min(newLeft, maxLeft));
     newTop = Math.max(0, Math.min(newTop, maxTop));
 
@@ -419,5 +467,13 @@ export class TouchInputManager {
 
   isVisible(): boolean {
     return !this.touchControls.classList.contains('hidden');
+  }
+
+  // Clean up event listeners and timers
+  destroy(): void {
+    window.removeEventListener('resize', this.boundResizeHandler);
+    this.cancelLongPress();
+    this.joystickTouch = null;
+    this.aimTouch = null;
   }
 }

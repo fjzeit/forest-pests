@@ -39,10 +39,18 @@ export class AlienFormation {
   private formationY: number;
   private direction: number = 1; // 1 = right, -1 = left
 
+  // Cached formation dimensions (calculated once on reset)
+  private totalWidth: number = 0;
+  private halfWidth: number = 0;
+
   // Movement timing
   private moveTimer: number = 0;
   private waveMultiplier: number = 1;
   private shootChance: number = GameConfig.timing.alienShootChanceBase;
+
+  // Cached alive count for performance
+  private cachedAliveCount: number = 0;
+  private brightnessDirty: boolean = true;
 
   // Dive bomber state
   private currentWave: number = 1;
@@ -64,6 +72,10 @@ export class AlienFormation {
 
   private createFormation(): void {
     const config = GameConfig.aliens;
+
+    // Cache formation dimensions (only changes on reset)
+    this.totalWidth = (config.columns - 1) * config.spacingX;
+    this.halfWidth = this.totalWidth / 2;
 
     for (let row = 0; row < config.rows; row++) {
       for (let col = 0; col < config.columns; col++) {
@@ -93,41 +105,56 @@ export class AlienFormation {
       }
     }
 
+    this.cachedAliveCount = this.aliens.length;
+    this.brightnessDirty = true;
     this.updateAlienPositions();
     this.updateAlienBrightness();
   }
 
   // Update brightness for all aliens based on their position in column
+  // Only recalculates when brightnessDirty flag is set
   updateAlienBrightness(): void {
+    if (!this.brightnessDirty) return;
+    this.brightnessDirty = false;
+
     const columns = GameConfig.aliens.columns;
 
     for (let col = 0; col < columns; col++) {
-      // Get all alive aliens in this column (excluding diving ones), sorted by gridY (front to back)
-      const columnAliens = this.aliens
-        .filter(a => a.alive && a.gridX === col && !a.isDiving())
-        .sort((a, b) => a.gridY - b.gridY);
+      // Get all alive aliens in this column (excluding diving ones), sorted by gridY
+      const columnAliens: Alien[] = [];
+      for (const alien of this.aliens) {
+        if (alien.alive && alien.gridX === col && !alien.isDiving()) {
+          columnAliens.push(alien);
+        }
+      }
+      // Sort by gridY (front to back) - small array, insertion sort efficient
+      columnAliens.sort((a, b) => a.gridY - b.gridY);
 
       // Update brightness for each alien in the column
-      columnAliens.forEach((alien, index) => {
-        alien.updateBrightness(index); // 0 = front (brightest), higher = dimmer
-      });
+      for (let i = 0; i < columnAliens.length; i++) {
+        columnAliens[i].updateBrightness(i); // 0 = front (brightest), higher = dimmer
+      }
     }
 
     // Diving aliens are always at full brightness
-    this.aliens.forEach(alien => {
+    for (const alien of this.aliens) {
       if (alien.alive && alien.isDiving()) {
-        alien.updateBrightness(0); // Full brightness
+        alien.updateBrightness(0);
       }
-    });
+    }
+  }
+
+  // Mark brightness as needing update (call when alien dies or dive state changes)
+  markBrightnessDirty(): void {
+    this.brightnessDirty = true;
   }
 
   private updateAlienPositions(): void {
     const config = GameConfig.aliens;
-    const totalWidth = (config.columns - 1) * config.spacingX;
-    const startX = -totalWidth / 2;
+    const startX = -this.halfWidth;
 
-    this.aliens.forEach(alien => {
-      if (!alien.alive) return;
+    for (const alien of this.aliens) {
+      if (!alien.alive) continue;
 
       const x = startX + alien.gridX * config.spacingX + this.formationX;
       // Row 0 is front (closest to player), so positive Z offset for higher rows
@@ -138,26 +165,24 @@ export class AlienFormation {
       alien.formationPos.set(x, y, z);
 
       // Skip setting position for diving aliens - they handle their own position
-      if (alien.isDiving()) return;
+      if (alien.isDiving()) continue;
 
       alien.setPosition(x, y, z);
-    });
+    }
   }
 
   update(deltaTime: number, playerX: number = 0, gameTime: number = 0): number {
-    const aliveAliens = this.aliens.filter(a => a.alive);
-    const aliveCount = aliveAliens.length;
-
-    if (aliveCount === 0) return 0;
+    if (this.cachedAliveCount === 0) return 0;
 
     // Track player position and game time for dive targeting
     this.playerX = playerX;
     this.currentGameTime = gameTime;
 
-    // Calculate move interval based on remaining aliens
+    // Calculate move interval based on remaining aliens (use cached count)
+    const totalAliens = GameConfig.aliens.columns * GameConfig.aliens.rows;
     const speedMultiplier = Math.max(
       GameConfig.gameplay.speedMultiplierMin,
-      aliveCount / (GameConfig.aliens.columns * GameConfig.aliens.rows)
+      this.cachedAliveCount / totalAliens
     );
     const moveInterval = GameConfig.timing.baseMoveInterval * speedMultiplier / 60; // Convert to seconds
 
@@ -173,7 +198,10 @@ export class AlienFormation {
       this.updateDiveAttacks(deltaTime);
     }
 
-    return aliveCount;
+    // Update brightness if dirty
+    this.updateAlienBrightness();
+
+    return this.cachedAliveCount;
   }
 
   // Update player position for targeting
@@ -187,20 +215,16 @@ export class AlienFormation {
     // Move formation horizontally
     this.formationX += config.baseSpeed * this.direction;
 
-    // Check if we hit the edge
-    const totalWidth = (config.columns - 1) * config.spacingX;
-    const halfWidth = totalWidth / 2;
-
-    // Find actual bounds based on alive aliens
+    // Find actual bounds based on alive aliens (use cached halfWidth)
     let leftmost = Infinity;
     let rightmost = -Infinity;
 
-    this.aliens.forEach(alien => {
-      if (!alien.alive) return;
-      const x = -halfWidth + alien.gridX * config.spacingX + this.formationX;
-      leftmost = Math.min(leftmost, x);
-      rightmost = Math.max(rightmost, x);
-    });
+    for (const alien of this.aliens) {
+      if (!alien.alive) continue;
+      const x = -this.halfWidth + alien.gridX * config.spacingX + this.formationX;
+      if (x < leftmost) leftmost = x;
+      if (x > rightmost) rightmost = x;
+    }
 
     // If hit edge, reverse and drop
     if (rightmost > config.edgeMargin || leftmost < -config.edgeMargin) {
@@ -212,9 +236,9 @@ export class AlienFormation {
     }
 
     // Animate all alive aliens
-    this.aliens.forEach(alien => {
+    for (const alien of this.aliens) {
       if (alien.alive) alien.animate();
-    });
+    }
 
     this.updateAlienPositions();
   }
@@ -289,11 +313,11 @@ export class AlienFormation {
       this.scheduleNextDive();
     }
 
-    // Update all diving aliens
-    this.aliens.forEach(alien => {
-      if (!alien.alive || !alien.isDiving()) return;
+    // Update all diving aliens (use for-of instead of forEach)
+    for (const alien of this.aliens) {
+      if (!alien.alive || !alien.isDiving()) continue;
       this.updateDivingAlien(alien, deltaTime);
-    });
+    }
   }
 
   private tryStartDive(): void {
@@ -454,18 +478,18 @@ export class AlienFormation {
     const shootInterval = DIVE_CONFIG.diveShootIntervalBase +
       (DIVE_CONFIG.diveShootIntervalLate - DIVE_CONFIG.diveShootIntervalBase) * waveProgress;
 
-    this.aliens.forEach(alien => {
-      if (!alien.alive || alien.diveState !== DiveState.DIVING) return;
+    for (const alien of this.aliens) {
+      if (!alien.alive || alien.diveState !== DiveState.DIVING) continue;
 
       // Check if enough time has passed since last shot
-      if (currentTime - alien.lastDiveShotTime < shootInterval) return;
+      if (currentTime - alien.lastDiveShotTime < shootInterval) continue;
 
       // Only shoot during middle portion of dive
-      if (alien.diveProgress < 0.2 || alien.diveProgress > 0.8) return;
+      if (alien.diveProgress < 0.2 || alien.diveProgress > 0.8) continue;
 
       alien.lastDiveShotTime = currentTime;
 
-      const position = alien.getPosition();
+      const position = alien.getPosition().clone();
       position.y -= 3;
 
       // Shoot toward player position
@@ -484,7 +508,7 @@ export class AlienFormation {
         shotType: 'plunger', // Dive bombers use plunger shots
         sourceAlien: alien   // Track source for cleanup when alien dies
       });
-    });
+    }
 
     return shots;
   }
@@ -534,19 +558,26 @@ export class AlienFormation {
     this.createFormation();
   }
 
-  // For collision detection
+  // For collision detection - uses squared distance for performance
   getAlienAtPosition(point: THREE.Vector3, radius: number): Alien | null {
     for (const alien of this.aliens) {
       if (!alien.alive) continue;
 
       const sphere = alien.getBoundingSphere();
-      const distance = sphere.center.distanceTo(point);
+      const combinedRadius = sphere.radius + radius;
+      const combinedRadiusSq = combinedRadius * combinedRadius;
 
-      if (distance < sphere.radius + radius) {
+      if (sphere.center.distanceToSquared(point) < combinedRadiusSq) {
         return alien;
       }
     }
     return null;
+  }
+
+  // Called when an alien is killed to update cached count
+  onAlienKilled(): void {
+    this.cachedAliveCount--;
+    this.brightnessDirty = true;
   }
 
   // Start the fly-in intro sequence

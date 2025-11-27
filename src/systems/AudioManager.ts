@@ -84,23 +84,51 @@ export class AudioManager {
       this.audioContext.resume();
     }
 
+    this.playToneAt(frequency, duration, this.audioContext.currentTime, type, volume);
+  }
+
+  // Play a tone at a specific time using Web Audio scheduling (no setTimeout)
+  private playToneAt(
+    frequency: number,
+    duration: number,
+    startTime: number,
+    type: OscillatorType = 'square',
+    volume: number = 0.3
+  ): void {
+    if (!this.audioContext) return;
+
     const oscillator = this.audioContext.createOscillator();
     const gainNode = this.audioContext.createGain();
 
     oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(frequency, startTime);
 
-    gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(
-      0.01,
-      this.audioContext.currentTime + duration
-    );
+    gainNode.gain.setValueAtTime(volume, startTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
 
     oscillator.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
 
-    oscillator.start();
-    oscillator.stop(this.audioContext.currentTime + duration);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + duration);
+  }
+
+  // Play a sequence of notes using Web Audio scheduling (avoids setTimeout overhead)
+  private playSequence(
+    notes: { freq: number; duration: number; delay: number; volume?: number }[],
+    type: OscillatorType = 'square',
+    baseVolume: number = 0.2
+  ): void {
+    if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
+
+    const baseTime = this.audioContext.currentTime;
+    for (const note of notes) {
+      const vol = note.volume !== undefined ? note.volume : baseVolume;
+      this.playToneAt(note.freq, note.duration, baseTime + note.delay / 1000, type, vol);
+    }
   }
 
   // March beat - the iconic 4-note bassline
@@ -244,35 +272,28 @@ export class AudioManager {
     noise.stop(this.audioContext.currentTime + duration);
   }
 
-  // Life lost - moderately sad tune ~5 seconds
+  // Life lost - moderately sad tune ~5 seconds (uses Web Audio scheduling)
   playLifeLost(): void {
-    if (!this.audioContext) return;
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-
     const vol = 0.18;
-
-    // Initial descending "uh oh" motif
-    setTimeout(() => this.playTone(440, 0.25, 'square', vol), 0);     // A4
-    setTimeout(() => this.playTone(392, 0.25, 'square', vol), 300);   // G4
-    setTimeout(() => this.playTone(349, 0.4, 'square', vol), 600);    // F4
-
-    // Melancholic middle section
-    setTimeout(() => this.playTone(330, 0.2, 'square', vol), 1200);   // E4
-    setTimeout(() => this.playTone(349, 0.2, 'square', vol), 1450);   // F4
-    setTimeout(() => this.playTone(330, 0.2, 'square', vol), 1700);   // E4
-    setTimeout(() => this.playTone(294, 0.35, 'square', vol), 1950);  // D4
-
-    // Slight recovery hint (not as final as game over)
-    setTimeout(() => this.playTone(330, 0.2, 'square', vol), 2500);   // E4
-    setTimeout(() => this.playTone(349, 0.2, 'square', vol), 2750);   // F4
-    setTimeout(() => this.playTone(330, 0.5, 'square', vol), 3000);   // E4
-
-    // Ending - minor resolve
-    setTimeout(() => this.playTone(262, 0.3, 'square', vol * 0.8), 3700);  // C4
-    setTimeout(() => this.playTone(330, 0.3, 'square', vol * 0.8), 3750);  // E4
-    setTimeout(() => this.playTone(392, 0.8, 'square', vol * 0.6), 3800);  // G4 - minor chord feel
+    this.playSequence([
+      // Initial descending "uh oh" motif
+      { freq: 440, duration: 0.25, delay: 0 },       // A4
+      { freq: 392, duration: 0.25, delay: 300 },     // G4
+      { freq: 349, duration: 0.4, delay: 600 },      // F4
+      // Melancholic middle section
+      { freq: 330, duration: 0.2, delay: 1200 },     // E4
+      { freq: 349, duration: 0.2, delay: 1450 },     // F4
+      { freq: 330, duration: 0.2, delay: 1700 },     // E4
+      { freq: 294, duration: 0.35, delay: 1950 },    // D4
+      // Slight recovery hint
+      { freq: 330, duration: 0.2, delay: 2500 },     // E4
+      { freq: 349, duration: 0.2, delay: 2750 },     // F4
+      { freq: 330, duration: 0.5, delay: 3000 },     // E4
+      // Ending - minor resolve
+      { freq: 262, duration: 0.3, delay: 3700, volume: vol * 0.8 },  // C4
+      { freq: 330, duration: 0.3, delay: 3750, volume: vol * 0.8 },  // E4
+      { freq: 392, duration: 0.8, delay: 3800, volume: vol * 0.6 },  // G4
+    ], 'square', vol);
   }
 
   // Disabled - too noisy
@@ -323,113 +344,101 @@ export class AudioManager {
   }
 
   playWaveComplete(): void {
-    // Happy triumphant fanfare - ~5 seconds
+    // Happy triumphant fanfare - ~5 seconds (uses Web Audio scheduling)
     const vol = 0.2;
-    // Opening flourish
-    setTimeout(() => this.playTone(523, 0.1, 'square', vol), 0);      // C5
-    setTimeout(() => this.playTone(659, 0.1, 'square', vol), 100);    // E5
-    setTimeout(() => this.playTone(784, 0.1, 'square', vol), 200);    // G5
-    setTimeout(() => this.playTone(1047, 0.3, 'square', vol), 300);   // C6
-
-    // Victory melody
-    setTimeout(() => this.playTone(784, 0.15, 'square', vol), 700);   // G5
-    setTimeout(() => this.playTone(880, 0.15, 'square', vol), 900);   // A5
-    setTimeout(() => this.playTone(784, 0.15, 'square', vol), 1100);  // G5
-    setTimeout(() => this.playTone(659, 0.15, 'square', vol), 1300);  // E5
-    setTimeout(() => this.playTone(784, 0.4, 'square', vol), 1500);   // G5
-
-    // Second phrase - higher
-    setTimeout(() => this.playTone(880, 0.15, 'square', vol), 2100);  // A5
-    setTimeout(() => this.playTone(988, 0.15, 'square', vol), 2300);  // B5
-    setTimeout(() => this.playTone(1047, 0.15, 'square', vol), 2500); // C6
-    setTimeout(() => this.playTone(988, 0.15, 'square', vol), 2700);  // B5
-    setTimeout(() => this.playTone(1047, 0.5, 'square', vol), 2900);  // C6
-
-    // Final triumphant chord arpeggio
-    setTimeout(() => this.playTone(523, 0.8, 'square', vol * 0.8), 3600);  // C5
-    setTimeout(() => this.playTone(659, 0.8, 'square', vol * 0.8), 3650);  // E5
-    setTimeout(() => this.playTone(784, 0.8, 'square', vol * 0.8), 3700);  // G5
-    setTimeout(() => this.playTone(1047, 1.0, 'square', vol), 3750);       // C6
+    this.playSequence([
+      // Opening flourish
+      { freq: 523, duration: 0.1, delay: 0 },       // C5
+      { freq: 659, duration: 0.1, delay: 100 },     // E5
+      { freq: 784, duration: 0.1, delay: 200 },     // G5
+      { freq: 1047, duration: 0.3, delay: 300 },    // C6
+      // Victory melody
+      { freq: 784, duration: 0.15, delay: 700 },    // G5
+      { freq: 880, duration: 0.15, delay: 900 },    // A5
+      { freq: 784, duration: 0.15, delay: 1100 },   // G5
+      { freq: 659, duration: 0.15, delay: 1300 },   // E5
+      { freq: 784, duration: 0.4, delay: 1500 },    // G5
+      // Second phrase - higher
+      { freq: 880, duration: 0.15, delay: 2100 },   // A5
+      { freq: 988, duration: 0.15, delay: 2300 },   // B5
+      { freq: 1047, duration: 0.15, delay: 2500 },  // C6
+      { freq: 988, duration: 0.15, delay: 2700 },   // B5
+      { freq: 1047, duration: 0.5, delay: 2900 },   // C6
+      // Final triumphant chord arpeggio
+      { freq: 523, duration: 0.8, delay: 3600, volume: vol * 0.8 },   // C5
+      { freq: 659, duration: 0.8, delay: 3650, volume: vol * 0.8 },   // E5
+      { freq: 784, duration: 0.8, delay: 3700, volume: vol * 0.8 },   // G5
+      { freq: 1047, duration: 1.0, delay: 3750 },   // C6
+    ], 'square', vol);
   }
 
   playGameOver(): void {
-    // Very sad game over dirge - ~5 seconds
+    // Very sad game over dirge - ~5 seconds (uses Web Audio scheduling)
     const vol = 0.2;
-
-    // Dramatic opening - descending doom
-    setTimeout(() => this.playTone(392, 0.4, 'square', vol), 0);      // G4
-    setTimeout(() => this.playTone(349, 0.4, 'square', vol), 450);    // F4
-    setTimeout(() => this.playTone(330, 0.4, 'square', vol), 900);    // E4
-    setTimeout(() => this.playTone(294, 0.6, 'square', vol), 1350);   // D4
-
-    // Mournful melody
-    setTimeout(() => this.playTone(262, 0.3, 'square', vol), 2100);   // C4
-    setTimeout(() => this.playTone(294, 0.3, 'square', vol), 2450);   // D4
-    setTimeout(() => this.playTone(262, 0.3, 'square', vol), 2800);   // C4
-    setTimeout(() => this.playTone(247, 0.5, 'square', vol), 3150);   // B3
-
-    // Final death knell - very low
-    setTimeout(() => this.playTone(196, 0.3, 'square', vol), 3800);   // G3
-    setTimeout(() => this.playTone(165, 0.3, 'square', vol), 4150);   // E3
-    setTimeout(() => this.playTone(131, 1.2, 'square', vol * 0.7), 4500); // C3 - long fade
+    this.playSequence([
+      // Dramatic opening - descending doom
+      { freq: 392, duration: 0.4, delay: 0 },       // G4
+      { freq: 349, duration: 0.4, delay: 450 },     // F4
+      { freq: 330, duration: 0.4, delay: 900 },     // E4
+      { freq: 294, duration: 0.6, delay: 1350 },    // D4
+      // Mournful melody
+      { freq: 262, duration: 0.3, delay: 2100 },    // C4
+      { freq: 294, duration: 0.3, delay: 2450 },    // D4
+      { freq: 262, duration: 0.3, delay: 2800 },    // C4
+      { freq: 247, duration: 0.5, delay: 3150 },    // B3
+      // Final death knell - very low
+      { freq: 196, duration: 0.3, delay: 3800 },    // G3
+      { freq: 165, duration: 0.3, delay: 4150 },    // E3
+      { freq: 131, duration: 1.2, delay: 4500, volume: vol * 0.7 }, // C3
+    ], 'square', vol);
   }
 
-  // Wacky intro tune - plays before aliens form up (~4 seconds)
+  // Wacky intro tune - plays before aliens form up (~4 seconds) - uses Web Audio scheduling
   playWaveIntro(): void {
-    if (!this.audioContext) return;
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-
     const vol = 0.18;
-
-    // Quirky ascending "here they come!" opening
-    setTimeout(() => this.playTone(262, 0.08, 'square', vol), 0);     // C4
-    setTimeout(() => this.playTone(330, 0.08, 'square', vol), 80);    // E4
-    setTimeout(() => this.playTone(392, 0.08, 'square', vol), 160);   // G4
-    setTimeout(() => this.playTone(523, 0.15, 'square', vol), 240);   // C5
-
-    // Bouncy descending riff
-    setTimeout(() => this.playTone(494, 0.08, 'square', vol), 450);   // B4
-    setTimeout(() => this.playTone(440, 0.08, 'square', vol), 530);   // A4
-    setTimeout(() => this.playTone(392, 0.08, 'square', vol), 610);   // G4
-    setTimeout(() => this.playTone(330, 0.12, 'square', vol), 690);   // E4
-
-    // Wacky chromatic wiggle
-    setTimeout(() => this.playTone(349, 0.06, 'square', vol), 900);   // F4
-    setTimeout(() => this.playTone(370, 0.06, 'square', vol), 960);   // F#4
-    setTimeout(() => this.playTone(392, 0.06, 'square', vol), 1020);  // G4
-    setTimeout(() => this.playTone(370, 0.06, 'square', vol), 1080);  // F#4
-    setTimeout(() => this.playTone(349, 0.06, 'square', vol), 1140);  // F4
-    setTimeout(() => this.playTone(330, 0.15, 'square', vol), 1200);  // E4
-
-    // Second phrase - higher energy
-    setTimeout(() => this.playTone(523, 0.08, 'square', vol), 1500);  // C5
-    setTimeout(() => this.playTone(587, 0.08, 'square', vol), 1580);  // D5
-    setTimeout(() => this.playTone(659, 0.08, 'square', vol), 1660);  // E5
-    setTimeout(() => this.playTone(698, 0.15, 'square', vol), 1740);  // F5
-
-    // Silly descending slide
-    setTimeout(() => this.playTone(659, 0.06, 'square', vol), 1950);  // E5
-    setTimeout(() => this.playTone(622, 0.06, 'square', vol), 2010);  // Eb5
-    setTimeout(() => this.playTone(587, 0.06, 'square', vol), 2070);  // D5
-    setTimeout(() => this.playTone(554, 0.06, 'square', vol), 2130);  // C#5
-    setTimeout(() => this.playTone(523, 0.12, 'square', vol), 2190);  // C5
-
-    // Bouncy buildup
-    setTimeout(() => this.playTone(392, 0.08, 'square', vol), 2400);  // G4
-    setTimeout(() => this.playTone(440, 0.08, 'square', vol), 2500);  // A4
-    setTimeout(() => this.playTone(494, 0.08, 'square', vol), 2600);  // B4
-    setTimeout(() => this.playTone(523, 0.08, 'square', vol), 2700);  // C5
-    setTimeout(() => this.playTone(587, 0.08, 'square', vol), 2800);  // D5
-    setTimeout(() => this.playTone(659, 0.08, 'square', vol), 2900);  // E5
-
-    // Final "get ready!" flourish
-    setTimeout(() => this.playTone(784, 0.1, 'square', vol), 3100);   // G5
-    setTimeout(() => this.playTone(880, 0.1, 'square', vol), 3200);   // A5
-    setTimeout(() => this.playTone(784, 0.1, 'square', vol), 3300);   // G5
-    setTimeout(() => this.playTone(659, 0.1, 'square', vol), 3400);   // E5
-    setTimeout(() => this.playTone(784, 0.4, 'square', vol * 1.2), 3550); // G5 - strong finish
+    this.playSequence([
+      // Quirky ascending "here they come!" opening
+      { freq: 262, duration: 0.08, delay: 0 },      // C4
+      { freq: 330, duration: 0.08, delay: 80 },     // E4
+      { freq: 392, duration: 0.08, delay: 160 },    // G4
+      { freq: 523, duration: 0.15, delay: 240 },    // C5
+      // Bouncy descending riff
+      { freq: 494, duration: 0.08, delay: 450 },    // B4
+      { freq: 440, duration: 0.08, delay: 530 },    // A4
+      { freq: 392, duration: 0.08, delay: 610 },    // G4
+      { freq: 330, duration: 0.12, delay: 690 },    // E4
+      // Wacky chromatic wiggle
+      { freq: 349, duration: 0.06, delay: 900 },    // F4
+      { freq: 370, duration: 0.06, delay: 960 },    // F#4
+      { freq: 392, duration: 0.06, delay: 1020 },   // G4
+      { freq: 370, duration: 0.06, delay: 1080 },   // F#4
+      { freq: 349, duration: 0.06, delay: 1140 },   // F4
+      { freq: 330, duration: 0.15, delay: 1200 },   // E4
+      // Second phrase - higher energy
+      { freq: 523, duration: 0.08, delay: 1500 },   // C5
+      { freq: 587, duration: 0.08, delay: 1580 },   // D5
+      { freq: 659, duration: 0.08, delay: 1660 },   // E5
+      { freq: 698, duration: 0.15, delay: 1740 },   // F5
+      // Silly descending slide
+      { freq: 659, duration: 0.06, delay: 1950 },   // E5
+      { freq: 622, duration: 0.06, delay: 2010 },   // Eb5
+      { freq: 587, duration: 0.06, delay: 2070 },   // D5
+      { freq: 554, duration: 0.06, delay: 2130 },   // C#5
+      { freq: 523, duration: 0.12, delay: 2190 },   // C5
+      // Bouncy buildup
+      { freq: 392, duration: 0.08, delay: 2400 },   // G4
+      { freq: 440, duration: 0.08, delay: 2500 },   // A4
+      { freq: 494, duration: 0.08, delay: 2600 },   // B4
+      { freq: 523, duration: 0.08, delay: 2700 },   // C5
+      { freq: 587, duration: 0.08, delay: 2800 },   // D5
+      { freq: 659, duration: 0.08, delay: 2900 },   // E5
+      // Final "get ready!" flourish
+      { freq: 784, duration: 0.1, delay: 3100 },    // G5
+      { freq: 880, duration: 0.1, delay: 3200 },    // A5
+      { freq: 784, duration: 0.1, delay: 3300 },    // G5
+      { freq: 659, duration: 0.1, delay: 3400 },    // E5
+      { freq: 784, duration: 0.4, delay: 3550, volume: vol * 1.2 }, // G5
+    ], 'square', vol);
   }
 
   // Flying saucer sound for wave intro

@@ -140,6 +140,11 @@ export class Alien {
   private animationFrame: number = 0;
   private currentBrightness: number = 1.0;
 
+  // Cached bounding sphere for collision detection
+  private cachedSphere: THREE.Sphere = new THREE.Sphere();
+  private sphereDirty: boolean = true;
+  private lastPosition: THREE.Vector3 = new THREE.Vector3();
+
   constructor(data: AlienData, scene: THREE.Scene) {
     this.type = data.type;
     this.points = data.points;
@@ -248,10 +253,15 @@ export class Alien {
 
   setPosition(x: number, y: number, z: number): void {
     this.group.position.set(x, y, z);
+    // Mark sphere dirty only if position actually changed
+    if (x !== this.lastPosition.x || y !== this.lastPosition.y || z !== this.lastPosition.z) {
+      this.sphereDirty = true;
+      this.lastPosition.set(x, y, z);
+    }
   }
 
   getPosition(): THREE.Vector3 {
-    return this.group.position.clone();
+    return this.group.position;  // Return reference, not clone
   }
 
   getBoundingBox(): THREE.Box3 {
@@ -259,9 +269,17 @@ export class Alien {
   }
 
   getBoundingSphere(): THREE.Sphere {
-    const sphere = new THREE.Sphere();
-    this.getBoundingBox().getBoundingSphere(sphere);
-    return sphere;
+    if (this.sphereDirty) {
+      // Recalculate sphere only when position changed
+      // Use approximate radius based on alien type (faster than setFromObject)
+      const scale = GameConfig.aliens.scale || 1;
+      const radius = this.type === 'crab' ? 6 * scale :
+                     this.type === 'bug' ? 6.5 * scale : 5 * scale;
+      this.cachedSphere.center.copy(this.group.position);
+      this.cachedSphere.radius = radius;
+      this.sphereDirty = false;
+    }
+    return this.cachedSphere;
   }
 
   // Toggle between animation frames

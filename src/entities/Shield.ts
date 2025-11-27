@@ -12,6 +12,8 @@ interface HexCell {
   instanceId: number;
   alive: boolean;
   phase: number; // For shimmer animation
+  cachedWorldPos: THREE.Vector3; // Cached world position for collision checks
+  lastColorState: number; // 0=healthy, 1=damaged, 2=critical - for change detection
 }
 
 export interface ShieldHitResult {
@@ -43,6 +45,11 @@ function createHexagonGeometry(radius: number, depth: number): THREE.BufferGeome
 }
 
 export class Shield {
+  // Static color constants to avoid creating new Color objects
+  private static readonly COLOR_HEALTHY = new THREE.Color(0, 0.6, 1);   // Bright blue
+  private static readonly COLOR_DAMAGED = new THREE.Color(0, 0.9, 1);   // Cyan - damaged
+  private static readonly COLOR_CRITICAL = new THREE.Color(0.5, 0.2, 1); // Purple - critical
+
   private cells: HexCell[] = [];
   private instancedMesh: THREE.InstancedMesh;
   private edgeMesh: THREE.InstancedMesh; // Glowing edges
@@ -55,6 +62,9 @@ export class Shield {
 
   private hexRadius: number = 3; // Size of each hexagon
   private hexDepth: number = 2; // Thicker energy field
+
+  // Cached bounding box (position never changes)
+  private cachedBoundingBox: THREE.Box3 | null = null;
 
   constructor(position: THREE.Vector3, scene: THREE.Scene, cellHealth: number = 3) {
     this.position = position;
@@ -129,17 +139,23 @@ export class Shield {
         }
 
         // Vertical wall - no tilt, just offset slightly back in Z
+        const worldX = this.position.x + localX;
+        const worldY = this.position.y + localY;
+        const worldZ = this.position.z;
+
         this.cells.push({
           x: col,
           y: row,
-          worldX: this.position.x + localX,
-          worldY: this.position.y + localY,
-          worldZ: this.position.z,
+          worldX,
+          worldY,
+          worldZ,
           health: this.cellHealth,
           maxHealth: this.cellHealth,
           instanceId: instanceId++,
           alive: true,
           phase: Math.random() * Math.PI * 2, // Random phase for shimmer
+          cachedWorldPos: new THREE.Vector3(worldX, worldY, worldZ), // Cache position
+          lastColorState: 0, // Start healthy
         });
       }
     }
@@ -154,11 +170,13 @@ export class Shield {
       this.edgeMesh.setMatrixAt(i, this.dummy.matrix);
     }
 
+    let colorNeedsUpdate = false;
+
     // Position alive cells
-    this.cells.forEach(cell => {
+    for (const cell of this.cells) {
       if (!cell.alive || cell.health <= 0) {
         cell.alive = false;
-        return;
+        continue;
       }
 
       this.dummy.position.set(cell.worldX, cell.worldY, cell.worldZ);
@@ -168,24 +186,33 @@ export class Shield {
       this.instancedMesh.setMatrixAt(cell.instanceId, this.dummy.matrix);
       this.edgeMesh.setMatrixAt(cell.instanceId, this.dummy.matrix);
 
-      // Color based on health - more vibrant when healthy
+      // Color based on health - use static colors and track state changes
       const healthRatio = cell.health / cell.maxHealth;
-      const color = new THREE.Color();
+      let newColorState: number;
+      let color: THREE.Color;
 
       if (healthRatio > 0.6) {
-        color.setRGB(0, 0.6, 1); // Bright blue
+        newColorState = 0;
+        color = Shield.COLOR_HEALTHY;
       } else if (healthRatio > 0.3) {
-        color.setRGB(0, 0.9, 1); // Cyan - damaged
+        newColorState = 1;
+        color = Shield.COLOR_DAMAGED;
       } else {
-        color.setRGB(0.5, 0.2, 1); // Purple - critical
+        newColorState = 2;
+        color = Shield.COLOR_CRITICAL;
       }
 
-      this.instancedMesh.setColorAt(cell.instanceId, color);
-    });
+      // Only update color if state changed
+      if (newColorState !== cell.lastColorState) {
+        cell.lastColorState = newColorState;
+        this.instancedMesh.setColorAt(cell.instanceId, color);
+        colorNeedsUpdate = true;
+      }
+    }
 
     this.instancedMesh.instanceMatrix.needsUpdate = true;
     this.edgeMesh.instanceMatrix.needsUpdate = true;
-    if (this.instancedMesh.instanceColor) {
+    if (colorNeedsUpdate && this.instancedMesh.instanceColor) {
       this.instancedMesh.instanceColor.needsUpdate = true;
     }
   }
@@ -206,36 +233,39 @@ export class Shield {
 
   // Check if a point hits the shield and damage it - returns hit info for explosion
   // damage parameter: 1 for alien shots, 50 for player shots
+  // Uses squared distance for performance
   checkHit(point: THREE.Vector3, radius: number, damage: number = 1): ShieldHitResult {
     // Find closest alive hex cell to the hit point
     let closestCell: HexCell | null = null;
-    let closestDist = Infinity;
-    let hitPosition: THREE.Vector3 | null = null;
+    let closestDistSq = Infinity;
 
     const hitThreshold = this.hexRadius * 1.5 + radius;
+    const hitThresholdSq = hitThreshold * hitThreshold;
 
     for (const cell of this.cells) {
       if (!cell.alive || cell.health <= 0) continue;
 
-      const cellPos = new THREE.Vector3(cell.worldX, cell.worldY, cell.worldZ);
-      const dist = point.distanceTo(cellPos);
+      // Use cached world position instead of creating new Vector3
+      const distSq = point.distanceToSquared(cell.cachedWorldPos);
 
-      if (dist < hitThreshold && dist < closestDist) {
-        closestDist = dist;
+      if (distSq < hitThresholdSq && distSq < closestDistSq) {
+        closestDistSq = distSq;
         closestCell = cell;
-        hitPosition = cellPos.clone();
       }
     }
 
     if (closestCell) {
+      const hitPosition = closestCell.cachedWorldPos.clone();
+
       // For high damage (player shots), destroy multiple cells in a radius
       if (damage > 1) {
         const blastRadius = this.hexRadius * GameConfig.shields.playerDamageRadius;
+        const blastRadiusSq = blastRadius * blastRadius;
         for (const cell of this.cells) {
           if (!cell.alive) continue;
-          const cellPos = new THREE.Vector3(cell.worldX, cell.worldY, cell.worldZ);
-          const dist = hitPosition!.distanceTo(cellPos);
-          if (dist <= blastRadius) {
+          // Use squared distance for blast radius check
+          const distSq = hitPosition.distanceToSquared(cell.cachedWorldPos);
+          if (distSq <= blastRadiusSq) {
             cell.health = 0;
             cell.alive = false;
           }
@@ -254,20 +284,23 @@ export class Shield {
     return { hit: false, position: null };
   }
 
-  // Get bounding box for quick collision pre-check
+  // Get bounding box for quick collision pre-check (cached since position never changes)
   getBoundingBox(): THREE.Box3 {
-    return new THREE.Box3(
-      new THREE.Vector3(
-        this.position.x - this.width / 2 - this.hexRadius * 2,
-        this.position.y - this.hexRadius * 2,
-        this.position.z - this.hexDepth - this.hexRadius * 2
-      ),
-      new THREE.Vector3(
-        this.position.x + this.width / 2 + this.hexRadius * 2,
-        this.position.y + this.height + this.hexRadius * 2,
-        this.position.z + this.hexDepth + this.hexRadius * 2
-      )
-    );
+    if (!this.cachedBoundingBox) {
+      this.cachedBoundingBox = new THREE.Box3(
+        new THREE.Vector3(
+          this.position.x - this.width / 2 - this.hexRadius * 2,
+          this.position.y - this.hexRadius * 2,
+          this.position.z - this.hexDepth - this.hexRadius * 2
+        ),
+        new THREE.Vector3(
+          this.position.x + this.width / 2 + this.hexRadius * 2,
+          this.position.y + this.height + this.hexRadius * 2,
+          this.position.z + this.hexDepth + this.hexRadius * 2
+        )
+      );
+    }
+    return this.cachedBoundingBox;
   }
 
   hasAliveCells(): boolean {
