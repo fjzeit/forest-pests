@@ -6,9 +6,9 @@ export const GameConfig = {
   // 4 shields at spacing 50 = span of 150 (-75 to +75), shield width 24
   // Field edge = 75 + 12 (half shield) + 24 (one shield width) = 111
   aliens: {
-    columns: 11,
+    columns: 10,
     rows: 5,
-    spacingX: 20,       // Horizontal spacing between aliens
+    spacingX: 22,       // Horizontal spacing between aliens
     spacingZ: 36,       // Depth spacing between rows
     startDistance: 400, // Starting Z distance from player
     startHeight: 60,    // Y position (height above ground)
