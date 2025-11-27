@@ -4,7 +4,17 @@ export class InputManager {
   private mouseButtons: Set<number> = new Set();
   private _isFiring: boolean = false;
 
+  // Mobile/touch support
+  private _isMobile: boolean;
+  private touchMoveInput = { x: 0, y: 0 };
+  private touchAimDelta = { x: 0, y: 0 };
+  private touchFiring = false;
+
   constructor() {
+    // Detect mobile device
+    this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || ('ontouchstart' in window)
+      || (navigator.maxTouchPoints > 0);
     // Keyboard events
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
     document.addEventListener('keyup', (e) => this.onKeyUp(e));
@@ -66,10 +76,16 @@ export class InputManager {
   }
 
   isFiring(): boolean {
-    return this._isFiring;  // Mouse click only - Space is used for menu
+    return this._isFiring || this.touchFiring;
   }
 
   getMoveInput(): { x: number; y: number } {
+    // On mobile, use touch joystick input
+    if (this._isMobile && (this.touchMoveInput.x !== 0 || this.touchMoveInput.y !== 0)) {
+      return { x: this.touchMoveInput.x, y: this.touchMoveInput.y };
+    }
+
+    // Desktop keyboard input
     let x = 0;
     let y = 0;
 
@@ -82,6 +98,16 @@ export class InputManager {
   }
 
   getMouseDelta(): { x: number; y: number } {
+    // On mobile, use accumulated touch aim delta
+    if (this._isMobile) {
+      const delta = { x: this.touchAimDelta.x, y: this.touchAimDelta.y };
+      // Reset after reading
+      this.touchAimDelta.x = 0;
+      this.touchAimDelta.y = 0;
+      return delta;
+    }
+
+    // Desktop mouse delta
     const delta = { x: this.mouseMovement.x, y: this.mouseMovement.y };
     // Reset after reading
     this.mouseMovement.x = 0;
@@ -91,5 +117,26 @@ export class InputManager {
 
   isPointerLocked(): boolean {
     return document.pointerLockElement !== null;
+  }
+
+  // Mobile detection
+  isMobile(): boolean {
+    return this._isMobile;
+  }
+
+  // Touch input injection methods (called by TouchInputManager)
+  setTouchMoveInput(x: number, y: number): void {
+    this.touchMoveInput.x = x;
+    this.touchMoveInput.y = y;
+  }
+
+  setTouchAimDelta(dx: number, dy: number): void {
+    // Accumulate delta like mouse movement
+    this.touchAimDelta.x += dx;
+    this.touchAimDelta.y += dy;
+  }
+
+  setTouchFiring(firing: boolean): void {
+    this.touchFiring = firing;
   }
 }

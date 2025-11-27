@@ -26,7 +26,8 @@ spaceinv/
       Projectile.ts       # Player and alien projectiles
       Shield.ts           # Destructible voxel shields with tilt
     systems/
-      InputManager.ts     # Keyboard/mouse input, pointer lock handling
+      InputManager.ts     # Keyboard/mouse/touch input, pointer lock, mobile detection
+      TouchInputManager.ts # Mobile touch controls (joystick, aim+fire zone)
       CollisionSystem.ts  # Sphere and voxel-based collision detection
       AudioManager.ts     # Web Audio sound effects and march beat
     rendering/
@@ -124,6 +125,13 @@ timing: {
   baseMoveInterval: 55,         // Frames at 60fps
   alienShootChanceBase: 0.005,  // Wave 1
   alienShootChanceMax: 0.05,    // Wave 100
+},
+
+touch: {
+  joystickSize: 120,       // Diameter of joystick base in pixels
+  joystickKnobSize: 50,    // Diameter of joystick knob
+  aimSensitivity: 0.004,   // 2x mouse sensitivity for touch
+  deadzone: 0.1,           // Minimum joystick input threshold
 },
 ```
 
@@ -246,19 +254,46 @@ const horizontalDist = Math.sqrt(
 );
 ```
 
-## Input System (InputManager.ts)
+## Input System (InputManager.ts, TouchInputManager.ts)
 
-**Controls**:
+**Desktop Controls**:
 - A/D or Arrow Left/Right: Strafe
-- W/S or Arrow Up/Down: Not used (forward/back removed)
+- W/S or Arrow Up/Down: Forward/back movement
 - Mouse: Aim (only when pointer locked)
 - Left click: Fire
-- SPACE: Fire (also handled in Game.ts for menus)
+- Any key: Start game from menu
+- SPACE: Restart from game over
 
-**Pointer Lock**:
+**Pointer Lock** (Desktop):
 - Requested on game start and after continuing
 - Mouse delta accumulated between frames
 - Input cleared when lock lost
+
+**Mobile Detection**:
+```typescript
+this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  || ('ontouchstart' in window)
+  || (navigator.maxTouchPoints > 0);
+```
+
+**Touch Input Injection**:
+- `setTouchMoveInput(x, y)`: Joystick values (-1 to 1)
+- `setTouchAimDelta(dx, dy)`: Accumulated like mouse movement
+- `setTouchFiring(firing)`: Fire state from touch
+
+**TouchInputManager** (Mobile):
+- Virtual joystick on left 30% of screen
+- Aim+fire zone on right 70% - touching aims AND fires simultaneously
+- Multi-touch tracking via `touch.identifier`
+- Joystick uses deadzone (0.1) and clamps to radius
+
+**Mobile Layout**:
+- Game area right-aligned at 70% width
+- Joystick zone on left 30%
+- Start screen centered (fixed position, full viewport)
+- No bevel/frame on mobile
+- Auto-fullscreen on game start
+- Forces landscape orientation when phone is in portrait (CSS rotate)
 
 ## Audio System (AudioManager.ts)
 
@@ -441,7 +476,9 @@ instancedMesh.instanceMatrix.needsUpdate = true;
 ## Development Commands
 
 ```bash
-npm install      # Install dependencies
-npm run dev      # Start dev server (Vite)
-npm run build    # Production build
+npm install                    # Install dependencies
+npm run dev                    # Start dev server (Vite)
+npm run dev -- --host          # Dev server on all interfaces (for mobile testing)
+npm run dev -- --host --https  # Dev server with HTTPS (requires @vitejs/plugin-basic-ssl)
+npm run build                  # Production build
 ```

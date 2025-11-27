@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GameConfig } from './GameConfig';
 import { SceneManager } from '../rendering/SceneManager';
 import { InputManager } from '../systems/InputManager';
+import { TouchInputManager } from '../systems/TouchInputManager';
 import { PlayerTurret } from '../entities/PlayerTurret';
 import { AlienFormation } from '../entities/AlienFormation';
 import { Projectile, ProjectileType } from '../entities/Projectile';
@@ -27,6 +28,7 @@ export enum GameState {
 export class Game {
   private sceneManager!: SceneManager;
   private inputManager!: InputManager;
+  private touchInputManager?: TouchInputManager;
   private crtEffect!: CRTEffect;
   private audioManager!: AudioManager;
   private explosionManager!: ExplosionManager;
@@ -81,6 +83,11 @@ export class Game {
     this.collisionSystem = new CollisionSystem();
     this.explosionManager = new ExplosionManager(this.sceneManager.scene);
 
+    // Initialize touch controls on mobile
+    if (this.inputManager.isMobile()) {
+      this.touchInputManager = new TouchInputManager(this.inputManager);
+    }
+
     // Initialize CRT post-processing
     this.crtEffect = new CRTEffect(
       this.sceneManager.renderer,
@@ -101,6 +108,12 @@ export class Game {
     // Set up space to start, click for pointer lock during gameplay
     document.addEventListener('keydown', (e) => this.handleKeyDown(e));
     document.addEventListener('click', () => this.handleClick());
+
+    // Touch start for mobile (on start screen and game message for restart)
+    if (this.inputManager.isMobile()) {
+      this.startPrompt.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+      this.messageElement.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+    }
 
     // Start game loop
     this.lastTime = performance.now();
@@ -142,9 +155,20 @@ export class Game {
     }
   }
 
+  private handleTouchStart(e: TouchEvent): void {
+    if (this.state === GameState.MENU) {
+      e.preventDefault();
+      this.startGame();
+    } else if (this.state === GameState.GAME_OVER) {
+      e.preventDefault();
+      this.resetGame();
+      this.startGame();
+    }
+  }
+
   private handleClick(): void {
-    if (this.state === GameState.PLAYING) {
-      // Request pointer lock for mouse control
+    if (this.state === GameState.PLAYING && !this.inputManager.isMobile()) {
+      // Request pointer lock for mouse control (desktop only)
       document.body.requestPointerLock();
     }
   }
@@ -154,10 +178,40 @@ export class Game {
     this.startPrompt.style.display = 'none';
     this.messageElement.style.display = 'none';
     this.crosshair.style.display = 'block';
-    document.body.requestPointerLock();
+
+    if (this.inputManager.isMobile()) {
+      // Mobile: request fullscreen and show touch controls
+      this.requestFullscreen();
+      this.touchInputManager?.show();
+    } else {
+      // Desktop: request pointer lock
+      document.body.requestPointerLock();
+    }
+
     // Start the fly-in intro sequence
     this.alienFormation.startIntro();
     this.audioManager.startSaucerSound();
+  }
+
+  private async requestFullscreen(): Promise<void> {
+    // Request fullscreen on document element so body centering still works
+    const elem = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+      msRequestFullscreen?: () => Promise<void>;
+    };
+
+    try {
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen();
+      }
+    } catch (err) {
+      // Fullscreen request may fail silently on some browsers
+      console.log('Fullscreen request failed:', err);
+    }
   }
 
   private resetGame(): void {
@@ -530,7 +584,14 @@ export class Game {
 
     // Restart march
     this.audioManager.startMarch();
-    document.body.requestPointerLock();
+
+    if (this.inputManager.isMobile()) {
+      // Mobile: show touch controls
+      this.touchInputManager?.show();
+    } else {
+      // Desktop: request pointer lock
+      document.body.requestPointerLock();
+    }
 
     this.updateUI();
   }
@@ -540,14 +601,22 @@ export class Game {
     this.audioManager.stopMarch();
     this.audioManager.stopSaucerSound(); // Stop landing sound if playing
     this.audioManager.playGameOver();
-    document.exitPointerLock();
     this.crosshair.style.display = 'none';
+
+    if (this.inputManager.isMobile()) {
+      // Mobile: hide touch controls
+      this.touchInputManager?.hide();
+    } else {
+      // Desktop: exit pointer lock
+      document.exitPointerLock();
+    }
 
     // Clear all projectiles
     this.projectiles.forEach(p => p.destroy(this.sceneManager.scene));
     this.projectiles = [];
 
-    this.showMessage('GAME OVER', `SCORE: ${this.score}`, 'PRESS SPACE TO RESTART');
+    const restartText = this.inputManager.isMobile() ? 'TAP TO RESTART' : 'PRESS SPACE TO RESTART';
+    this.showMessage('GAME OVER', `SCORE: ${this.score}`, restartText);
   }
 
   private showMessage(title: string, info?: string, prompt?: string): void {

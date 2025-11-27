@@ -132,17 +132,21 @@ export class PlayerTurret {
       this.position.z = Math.max(maxZ, Math.min(minZ, this.position.z));
     }
 
-    // Handle mouse aim (only when pointer is locked)
-    if (input.isPointerLocked()) {
-      const mouseDelta = input.getMouseDelta();
+    // Handle aim (pointer lock for desktop, touch for mobile)
+    if (input.isPointerLocked() || input.isMobile()) {
+      const aimDelta = input.getMouseDelta();
+      // Use touch sensitivity on mobile for better responsiveness
+      const sensitivity = input.isMobile()
+        ? GameConfig.touch.aimSensitivity
+        : GameConfig.player.aimSensitivity;
 
       // Limited horizontal aiming (~18 degrees = 0.31 radians)
       const maxYawLimit = 0.31;
-      this.yaw -= mouseDelta.x * GameConfig.player.aimSensitivity;
+      this.yaw -= aimDelta.x * sensitivity;
       this.yaw = Math.max(-maxYawLimit, Math.min(maxYawLimit, this.yaw));
 
       // Update pitch (vertical)
-      this.pitch -= mouseDelta.y * GameConfig.player.aimSensitivity;
+      this.pitch -= aimDelta.y * sensitivity;
       // Clamp pitch around the base pitch
       const minPitch = GameConfig.player.basePitch - GameConfig.player.maxPitch;
       const maxPitch = GameConfig.player.basePitch + GameConfig.player.maxPitch;

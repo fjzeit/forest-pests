@@ -84,4 +84,12 @@ export const GameConfig = {
     nearPlane: 0.1,
     farPlane: 1000,
   },
+
+  // Touch/Mobile controls
+  touch: {
+    joystickSize: 120,       // Diameter of joystick base in pixels
+    joystickKnobSize: 50,    // Diameter of joystick knob
+    aimSensitivity: 0.004,   // 2x mouse sensitivity for touch responsiveness
+    deadzone: 0.1,           // Minimum joystick input threshold
+  },
 } as const;

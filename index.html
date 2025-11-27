@@ -233,6 +233,7 @@
       border-radius: 1vmin;
       background: rgba(0, 50, 100, 0.5);
       font-family: 'Press Start 2P', 'Courier New', monospace;
+      pointer-events: auto;
     }
     #game-message .message-title {
       font-size: 3vmin;
@@ -411,6 +412,122 @@
       80% { transform: translate(3px, -1px); }
       90% { transform: translate(-1px, 0px); }
     }
+
+    /* Touch Controls - fixed position overlay */
+    #touch-controls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2000;
+    }
+    #touch-controls.hidden {
+      display: none;
+    }
+
+    /* Joystick Zone - left side of screen */
+    #joystick-zone {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 30%;
+      height: 100%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    #joystick-base {
+      position: absolute;
+      bottom: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(0, 255, 0, 0.15);
+      border: 3px solid rgba(0, 255, 0, 0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #joystick-knob {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(0, 255, 0, 0.5);
+      border: 2px solid rgba(0, 255, 0, 0.7);
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
+    }
+
+    /* Aim+Fire Zone - right side of screen (game area) */
+    #aim-fire-zone {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 30%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+
+    /* Prevent text selection on touch controls */
+    #touch-controls * {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    /* Mobile-specific styles */
+    @media (pointer: coarse) {
+      /* Right-align game, remove bevel */
+      html, body {
+        justify-content: flex-end;
+      }
+      #game-container {
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        max-width: 70%;
+        max-height: 100%;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      #game-container::before,
+      #game-container::after {
+        display: none;
+      }
+      /* Start screen centered on full viewport */
+      #start-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 3000;
+      }
+      /* Hide desktop controls text, show mobile */
+      .controls-desktop { display: none !important; }
+      .controls-mobile { display: block !important; }
+    }
+
+    /* Force landscape on mobile portrait */
+    @media (pointer: coarse) and (orientation: portrait) {
+      html {
+        transform: rotate(90deg);
+        transform-origin: top left;
+        width: 100vh;
+        height: 100vw;
+        position: absolute;
+        top: 0;
+        left: 100%;
+        overflow: hidden;
+      }
+    }
+
+    /* Default: show desktop, hide mobile controls text */
+    .controls-mobile { display: none; }
   </style>
 </head>
 <body>
@@ -446,14 +563,26 @@
           <div id="start-title">FOREST PESTS</div>
           <div id="start-subtitle">A FIRST-PERSON ARCADE SHOOTER</div>
           <div id="start-prompt">
-            <div class="controls">WASD - MOVE</div>
-            <div class="controls">MOUSE - AIM &amp; SHOOT</div>
-            <div class="press-start">PRESS ANY KEY TO START</div>
+            <div class="controls controls-desktop">WASD - MOVE</div>
+            <div class="controls controls-desktop">MOUSE - AIM &amp; SHOOT</div>
+            <div class="controls controls-mobile">LEFT THUMB - MOVE</div>
+            <div class="controls controls-mobile">RIGHT THUMB - AIM &amp; FIRE</div>
+            <div class="press-start controls-desktop">PRESS ANY KEY TO START</div>
+            <div class="press-start controls-mobile">TAP TO START</div>
           </div>
         </div>
       </div>
       <div id="damage-overlay"></div>
     </div>
+  </div>
+  <!-- Touch Controls outside game container for proper layout -->
+  <div id="touch-controls" class="hidden">
+    <div id="joystick-zone">
+      <div id="joystick-base">
+        <div id="joystick-knob"></div>
+      </div>
+    </div>
+    <div id="aim-fire-zone"></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
