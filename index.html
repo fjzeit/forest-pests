@@ -8,7 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>Forest Pests - First Person</title>
   <meta name="description" content="A first-person arcade shooter inspired by classic Space Invaders">
-  <link rel="manifest" href="./manifest.json">
+  <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./images/icon-192.png">
 
   <!-- Twitter Card -->
@@ -622,6 +622,55 @@
 
     /* Default: show desktop, hide mobile controls text */
     .controls-mobile { display: none; }
+
+    /* PWA Update Prompt */
+    #update-prompt {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10000;
+      background: rgba(0, 30, 60, 0.95);
+      border: 2px solid rgba(0, 170, 255, 0.6);
+      border-radius: 8px;
+      padding: 15px 20px;
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      color: #aaccff;
+      font-size: 12px;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 4px 20px rgba(0, 170, 255, 0.3);
+    }
+    #update-prompt span {
+      color: #00ff88;
+      text-shadow: 0 0 8px #00ff88;
+    }
+    #update-prompt button {
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      font-size: 10px;
+      padding: 8px 12px;
+      border: 2px solid;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #update-btn {
+      background: rgba(0, 255, 136, 0.2);
+      border-color: #00ff88;
+      color: #00ff88;
+    }
+    #update-btn:hover {
+      background: rgba(0, 255, 136, 0.4);
+      box-shadow: 0 0 10px #00ff88;
+    }
+    #dismiss-btn {
+      background: rgba(100, 100, 100, 0.2);
+      border-color: #666;
+      color: #888;
+    }
+    #dismiss-btn:hover {
+      background: rgba(100, 100, 100, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -687,6 +736,12 @@
         <div id="joystick-knob"></div>
       </div>
     </div>
+  </div>
+  <!-- PWA Update Prompt -->
+  <div id="update-prompt">
+    <span>Update available!</span>
+    <button id="update-btn">UPDATE</button>
+    <button id="dismiss-btn">LATER</button>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
