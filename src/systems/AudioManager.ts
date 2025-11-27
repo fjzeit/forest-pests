@@ -23,6 +23,9 @@ export class AudioManager {
       this.unlock();
     };
     document.addEventListener('click', initOnInteraction, { capture: true });
+    document.addEventListener('mousedown', initOnInteraction, { capture: true });
+    document.addEventListener('pointerdown', initOnInteraction, { capture: true } as AddEventListenerOptions);
+    document.addEventListener('keydown', initOnInteraction, { capture: true });
     document.addEventListener('touchstart', initOnInteraction, { capture: true });
     document.addEventListener('touchend', initOnInteraction, { capture: true });
   }

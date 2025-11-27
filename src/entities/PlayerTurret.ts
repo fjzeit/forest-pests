@@ -139,25 +139,37 @@ export class PlayerTurret {
       this.position.z = Math.max(maxZ, Math.min(minZ, this.position.z));
     }
 
-    // Handle aim (pointer lock for desktop, touch for mobile)
-    if (input.isPointerLocked() || input.isMobile()) {
-      const aimDelta = input.getMouseDelta();
-      // Use touch sensitivity on mobile for better responsiveness
-      const sensitivity = input.isMobile()
-        ? GameConfig.touch.aimSensitivity
-        : GameConfig.player.aimSensitivity;
+    // Handle aim (mouse for desktop, touch for mobile). Pointer lock enables
+    // unbounded mouse deltas where supported, but aiming also works when the
+    // browser does not implement the Pointer Lock API.
+    const aimDelta = input.getMouseDelta();
+    // Use touch sensitivity on mobile for better responsiveness. On desktop
+    // without Pointer Lock active, bump sensitivity (especially vertical) so
+    // less physical mouse travel is needed before hitting the window edge.
+    const baseSensitivity = input.isMobile()
+      ? GameConfig.touch.aimSensitivity
+      : GameConfig.player.aimSensitivity;
 
-      // Limited horizontal aiming - use MAX_YAW constant
-      this.yaw -= aimDelta.x * sensitivity;
-      this.yaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, this.yaw));
+    let yawSensitivity = baseSensitivity;
+    let pitchSensitivity = baseSensitivity;
 
-      // Update pitch (vertical)
-      this.pitch -= aimDelta.y * sensitivity;
-      // Clamp pitch around the base pitch
-      const minPitch = GameConfig.player.basePitch - GameConfig.player.maxPitch;
-      const maxPitch = GameConfig.player.basePitch + GameConfig.player.maxPitch;
-      this.pitch = Math.max(minPitch, Math.min(maxPitch, this.pitch));
+    if (!input.isMobile() && !input.isPointerLocked()) {
+      // Desktop, pointer not locked (e.g., browsers without working Pointer
+      // Lock API): make movement larger.
+      yawSensitivity *= 3;
+      pitchSensitivity *= 5;
     }
+
+    // Limited horizontal aiming - use MAX_YAW constant
+    this.yaw -= aimDelta.x * yawSensitivity;
+    this.yaw = Math.max(-MAX_YAW, Math.min(MAX_YAW, this.yaw));
+
+    // Update pitch (vertical)
+    this.pitch -= aimDelta.y * pitchSensitivity;
+    // Clamp pitch around the base pitch
+    const minPitch = GameConfig.player.basePitch - GameConfig.player.maxPitch;
+    const maxPitch = GameConfig.player.basePitch + GameConfig.player.maxPitch;
+    this.pitch = Math.max(minPitch, Math.min(maxPitch, this.pitch));
 
     // Animate recoil recovery
     if (this.recoilOffset > 0) {
