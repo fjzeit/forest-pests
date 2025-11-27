@@ -29,6 +29,10 @@ export class InputManager {
 
   private onKeyDown(e: KeyboardEvent): void {
     this.keys.add(e.code);
+    // Space bar to fire (when pointer locked)
+    if (e.code === 'Space' && document.pointerLockElement) {
+      this.fireQueue = 1;
+    }
   }
 
   private onKeyUp(e: KeyboardEvent): void {

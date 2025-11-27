@@ -605,19 +605,7 @@
       .controls-mobile { display: block !important; }
     }
 
-    /* Force landscape on mobile portrait */
-    @media (pointer: coarse) and (orientation: portrait) {
-      html {
-        transform: rotate(90deg);
-        transform-origin: top left;
-        width: 100dvh;
-        height: 100dvw;
-        position: absolute;
-        top: 0;
-        left: 100%;
-        overflow: hidden;
-      }
-    }
+    /* Portrait mode is handled by JavaScript showing a rotate overlay */
 
     /* Default: show desktop, hide mobile controls text */
     .controls-mobile { display: none; }

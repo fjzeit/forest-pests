@@ -67,13 +67,6 @@ export class TouchInputManager {
     window.addEventListener('resize', () => this.clampToScreen());
   }
 
-  // Check if CSS rotation is active (mobile in physical portrait)
-  private isCssRotated(): boolean {
-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    const isPhysicalPortrait = window.innerWidth < window.innerHeight;
-    return isMobile && isPhysicalPortrait;
-  }
-
   private loadSavedPosition(): void {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -87,52 +80,53 @@ export class TouchInputManager {
   }
 
   private applyPosition(leftPercent: number, topPercent: number): void {
-    // When CSS rotates the view 90deg, we need to transform coordinates
-    // CSS rotation: physical Y becomes visual X, physical X becomes visual Y (inverted)
-    if (this.isCssRotated()) {
-      // Transform from logical (landscape) to physical (portrait) coordinates
-      // Visual left% -> physical top%
-      // Visual top% -> physical right% (100 - left)
-      const physicalTop = leftPercent;
-      const physicalLeft = 100 - topPercent - (this.joystickZone.offsetHeight / window.innerWidth) * 100;
-      this.joystickZone.style.setProperty('right', 'auto', 'important');
-      this.joystickZone.style.setProperty('bottom', 'auto', 'important');
-      this.joystickZone.style.setProperty('left', `${physicalLeft}%`, 'important');
-      this.joystickZone.style.setProperty('top', `${physicalTop}%`, 'important');
-    } else {
-      this.joystickZone.style.setProperty('right', 'auto', 'important');
-      this.joystickZone.style.setProperty('bottom', 'auto', 'important');
-      this.joystickZone.style.setProperty('left', `${leftPercent}%`, 'important');
-      this.joystickZone.style.setProperty('top', `${topPercent}%`, 'important');
-    }
+    this.joystickZone.style.setProperty('right', 'auto', 'important');
+    this.joystickZone.style.setProperty('bottom', 'auto', 'important');
+    this.joystickZone.style.setProperty('left', `${leftPercent}%`, 'important');
+    this.joystickZone.style.setProperty('top', `${topPercent}%`, 'important');
   }
 
   private savePosition(): void {
     const rect = this.joystickZone.getBoundingClientRect();
-
-    // When CSS rotates the view, transform physical coordinates to logical (landscape)
-    if (this.isCssRotated()) {
-      // Physical coords are in portrait space, transform to landscape logical coords
-      // Physical top -> logical left
-      // Physical left -> logical bottom (invert for top)
-      const pos = {
-        leftPercent: (rect.top / window.innerHeight) * 100,
-        topPercent: 100 - (rect.left / window.innerWidth) * 100 - (rect.width / window.innerWidth) * 100
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
-    } else {
-      const pos = {
-        leftPercent: (rect.left / window.innerWidth) * 100,
-        topPercent: (rect.top / window.innerHeight) * 100
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
-    }
+    const pos = {
+      leftPercent: (rect.left / window.innerWidth) * 100,
+      topPercent: (rect.top / window.innerHeight) * 100
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
   }
 
-  // Ensure joystick stays within screen bounds after resize/orientation change
+  // Ensure joystick stays within screen bounds after resize
   private clampToScreen(): void {
-    // Reload saved position - this handles coordinate transforms correctly
-    this.loadSavedPosition();
+    const rect = this.joystickZone.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width;
+    const maxTop = window.innerHeight - rect.height;
+
+    let needsUpdate = false;
+    let newLeft = rect.left;
+    let newTop = rect.top;
+
+    if (rect.left < 0) {
+      newLeft = 0;
+      needsUpdate = true;
+    } else if (rect.left > maxLeft) {
+      newLeft = maxLeft;
+      needsUpdate = true;
+    }
+
+    if (rect.top < 0) {
+      newTop = 0;
+      needsUpdate = true;
+    } else if (rect.top > maxTop) {
+      newTop = maxTop;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      const leftPercent = (newLeft / window.innerWidth) * 100;
+      const topPercent = (newTop / window.innerHeight) * 100;
+      this.applyPosition(leftPercent, topPercent);
+      this.savePosition();
+    }
   }
 
   private bindEvents(): void {
@@ -405,6 +399,10 @@ export class TouchInputManager {
   }
 
   // Public methods
+  reloadPosition(): void {
+    this.loadSavedPosition();
+  }
+
   show(): void {
     this.touchControls.classList.remove('hidden');
   }

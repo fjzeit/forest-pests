@@ -235,21 +235,10 @@ export class SceneManager {
     this.renderer.render(this.scene, this.camera);
   }
 
-  // Get effective dimensions, accounting for CSS rotation on mobile portrait
+  // Get effective dimensions
   private getEffectiveDimensions(): { width: number; height: number } {
-    let width = this.container.clientWidth || window.innerWidth;
-    let height = this.container.clientHeight || window.innerHeight;
-
-    // On mobile in portrait, CSS rotates the view 90 degrees
-    // We need to swap dimensions to match what the user sees
-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    const isPhysicalPortrait = window.innerWidth < window.innerHeight;
-
-    if (isMobile && isPhysicalPortrait) {
-      // CSS is rotating the view - swap dimensions
-      [width, height] = [height, width];
-    }
-
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
     return { width, height };
   }
 

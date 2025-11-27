@@ -23,6 +23,7 @@ export enum GameState {
   LIFE_LOST_DELAY,
   WAVE_INTRO,
   INVASION_LANDING,
+  ROTATE_DEVICE,
 }
 
 export class Game {
@@ -64,6 +65,12 @@ export class Game {
   private damageOverlay!: HTMLElement;
   private uiOverlay!: HTMLElement;
   private healthBar!: HTMLElement;
+  private rotateOverlay!: HTMLElement;
+
+  // Orientation tracking
+  private orientationLocked = false;
+  private orientationListenersSetup = false;
+  private stateBeforeRotate: GameState = GameState.MENU;
 
   init(): void {
     // Get UI elements
@@ -88,13 +95,33 @@ export class Game {
     if (this.inputManager.isMobile()) {
       this.touchInputManager = new TouchInputManager(this.inputManager);
 
-      // Try to lock orientation to landscape (CSS rotation is fallback for iOS/unsupported browsers)
+      // Create rotate device overlay
+      this.createRotateOverlay();
+
+      // Try to lock orientation to landscape
       const orientation = screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
       if (orientation?.lock) {
-        orientation.lock('landscape').catch(() => {
-          // Silently fall back to CSS rotation
+        orientation.lock('landscape').then(() => {
+          // Native lock succeeded
+          this.orientationLocked = true;
+          document.documentElement.classList.add('orientation-locked');
+          this.touchInputManager?.reloadPosition();
+        }).catch(() => {
+          // Lock failed - will need to show rotate message in portrait
+          this.setupOrientationListeners();
         });
+      } else {
+        // Lock not available - will need to show rotate message in portrait
+        this.setupOrientationListeners();
       }
+
+      // Always set up listeners as backup (lock might silently fail)
+      // The checkOrientation will be a no-op if orientationLocked is true
+      setTimeout(() => {
+        if (!this.orientationLocked) {
+          this.setupOrientationListeners();
+        }
+      }, 500);
     }
 
     // Initialize CRT post-processing
@@ -723,6 +750,90 @@ export class Game {
       this.healthBar.classList.add('critical');
     } else if (healthPercent <= 50) {
       this.healthBar.classList.add('warning');
+    }
+  }
+
+  private createRotateOverlay(): void {
+    this.rotateOverlay = document.createElement('div');
+    this.rotateOverlay.id = 'rotate-overlay';
+    this.rotateOverlay.innerHTML = `
+      <div class="rotate-content">
+        <div class="rotate-icon">📱</div>
+        <div class="rotate-text">Please rotate your device to landscape</div>
+      </div>
+    `;
+    this.rotateOverlay.style.cssText = `
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+    `;
+    const style = document.createElement('style');
+    style.textContent = `
+      #rotate-overlay .rotate-content {
+        text-align: center;
+        color: #00ff88;
+        font-family: 'Courier New', monospace;
+      }
+      #rotate-overlay .rotate-icon {
+        font-size: 80px;
+        animation: rotate-hint 2s ease-in-out infinite;
+      }
+      #rotate-overlay .rotate-text {
+        font-size: 24px;
+        margin-top: 20px;
+      }
+      @keyframes rotate-hint {
+        0%, 100% { transform: rotate(0deg); }
+        50% { transform: rotate(90deg); }
+      }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(this.rotateOverlay);
+  }
+
+  private setupOrientationListeners(): void {
+    if (this.orientationListenersSetup) return;
+    this.orientationListenersSetup = true;
+
+    // Check immediately
+    this.checkOrientation();
+
+    // Listen for orientation changes
+    window.addEventListener('resize', () => this.checkOrientation());
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => this.checkOrientation(), 100);
+    });
+  }
+
+  private checkOrientation(): void {
+    if (this.orientationLocked) return;
+
+    const isPortrait = window.innerWidth < window.innerHeight;
+
+    if (isPortrait && this.state !== GameState.ROTATE_DEVICE) {
+      // Entering portrait - pause and show overlay
+      this.stateBeforeRotate = this.state;
+      this.state = GameState.ROTATE_DEVICE;
+      this.rotateOverlay.style.display = 'flex';
+      this.audioManager.stopMarch();
+      this.audioManager.stopSaucerSound();
+    } else if (!isPortrait && this.state === GameState.ROTATE_DEVICE) {
+      // Returning to landscape - resume
+      this.state = this.stateBeforeRotate;
+      this.rotateOverlay.style.display = 'none';
+      // Resume audio if we were playing
+      if (this.state === GameState.PLAYING) {
+        this.audioManager.startMarch();
+      } else if (this.state === GameState.WAVE_INTRO) {
+        this.audioManager.startSaucerSound();
+      }
     }
   }
 
