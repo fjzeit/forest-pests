@@ -1,6 +1,6 @@
-# Space Invaders - First Person
+# Forest Pests - First Person
 
-A first-person Space Invaders homage game with 1970s/80s CRT aesthetic, viewed from inside the defender's turret looking up at ~40 degrees toward approaching aliens.
+A first-person Space Invaders homage game with 1970s/80s CRT aesthetic, viewed from inside the defender's turret looking up at approaching alien pests in a forest clearing.
 
 ## Tech Stack
 
@@ -8,63 +8,76 @@ A first-person Space Invaders homage game with 1970s/80s CRT aesthetic, viewed f
 - **Rendering**: Three.js with post-processing (EffectComposer, UnrealBloomPass)
 - **Audio**: Web Audio API (oscillators, noise buffers, filters)
 - **Build**: npm
+- **PWA**: Standalone app with orientation lock support
 
 ## Project Structure
 
 ```
 spaceinv/
   index.html              # Game container, CSS styling, UI overlay elements
+  public/
+    manifest.json         # PWA manifest (standalone, landscape orientation)
+    images/               # Icons and social cards
   src/
     main.ts               # Entry point - creates Game instance
     game/
       Game.ts             # Main game loop, state management, collision handling
       GameConfig.ts       # Central configuration constants
     entities/
-      Alien.ts            # Voxel-based alien sprites with 2-frame animation
-      AlienFormation.ts   # Formation movement, shooting logic, wave scaling
+      Alien.ts            # Voxel-based alien sprites with 2-frame animation, dive bomber support
+      AlienFormation.ts   # Formation movement, shooting, dive attacks, wave scaling
       PlayerTurret.ts     # Camera, movement, aiming, visible turret mesh
       Projectile.ts       # Player and alien projectiles
       Shield.ts           # Destructible voxel shields with tilt
     systems/
-      InputManager.ts     # Keyboard/mouse/touch input, pointer lock, mobile detection
-      TouchInputManager.ts # Mobile touch controls (joystick, aim+fire zone)
+      InputManager.ts     # Keyboard/mouse/touch input, pointer lock (WebKit compatible), external input detection
+      TouchInputManager.ts # Mobile touch controls (repositionable joystick, aim+fire zone)
       CollisionSystem.ts  # Sphere and voxel-based collision detection
       AudioManager.ts     # Web Audio sound effects and march beat
     rendering/
-      SceneManager.ts     # Three.js scene, camera, lights, environment
+      SceneManager.ts     # Three.js scene, camera, lights, forest environment
       ExplosionEffect.ts  # Particle system with debris physics
       shaders/
         CRTEffect.ts      # Post-processing (scanlines, bloom, distortion)
   lode/
     summary.md            # This file
     lode-overview.md      # Lode documentation guidelines
+    grok-sound-on-ios.md  # iOS Safari audio unlock guide
 ```
 
 ## Game States (Game.ts)
 
 ```typescript
 export enum GameState {
-  MENU,                 // Initial state, waiting for SPACE
+  MENU,                 // Initial state, waiting for any key/click/tap
   PLAYING,              // Active gameplay
   PAUSED,               // Not currently used
   GAME_OVER,            // Final score displayed
-  WAVE_COMPLETE,        // Showing wave complete message
+  WAVE_COMPLETE,        // Showing wave complete message (auto-continues)
   WAVE_COMPLETE_DELAY,  // Waiting for explosions to finish
-  LIFE_LOST,            // Showing life lost message
+  LIFE_LOST,            // Showing life lost message (auto-continues)
   LIFE_LOST_DELAY,      // Waiting for turret explosion
+  WAVE_INTRO,           // Aliens flying in from distance
+  INVASION_LANDING,     // Game over sequence - aliens landing
+  ROTATE_DEVICE,        // Mobile portrait mode - paused, showing rotate message
 }
 ```
 
 State transitions:
-- `MENU` → `PLAYING` (SPACE key)
+- `MENU` → `WAVE_INTRO` (any key/click/tap)
+- `WAVE_INTRO` → `PLAYING` (aliens finished flying in)
 - `PLAYING` → `WAVE_COMPLETE_DELAY` (all aliens killed)
 - `WAVE_COMPLETE_DELAY` → `WAVE_COMPLETE` (explosions finished + 1s timer)
-- `WAVE_COMPLETE` → `PLAYING` (SPACE key, calls nextWave())
+- `WAVE_COMPLETE` → `WAVE_INTRO` (auto after ~5s tune, calls nextWave())
 - `PLAYING` → `LIFE_LOST_DELAY` (health reaches 0)
 - `LIFE_LOST_DELAY` → `LIFE_LOST` (explosions finished + 1.5s timer)
-- `LIFE_LOST` → `PLAYING` (SPACE key, resets health/turret)
-- `PLAYING` → `GAME_OVER` (lives = 0 OR aliens reach danger zone)
-- `GAME_OVER` → `PLAYING` (SPACE key, calls resetGame() + startGame())
+- `LIFE_LOST` → `PLAYING` (auto after ~5s tune OR any input after 1s delay)
+- `PLAYING` → `INVASION_LANDING` (aliens reach danger zone)
+- `INVASION_LANDING` → `GAME_OVER` (aliens finish landing animation)
+- `PLAYING` → `GAME_OVER` (lives = 0)
+- `GAME_OVER` → `WAVE_INTRO` (any input after 1.5s delay, calls resetGame() + startGame())
+- Any state → `ROTATE_DEVICE` (mobile portrait detected without orientation lock)
+- `ROTATE_DEVICE` → previous state (landscape restored)
 
 ## Configuration (GameConfig.ts)
 
@@ -72,9 +85,9 @@ All magic numbers centralized here. Key values:
 
 ```typescript
 aliens: {
-  columns: 11,
+  columns: 10,
   rows: 5,
-  spacingX: 16,         // Tight horizontal spacing
+  spacingX: 22,         // Horizontal spacing between aliens
   spacingZ: 36,         // Depth between rows
   startDistance: 400,   // Initial Z distance
   startHeight: 60,      // Y position
@@ -90,10 +103,10 @@ player: {
   aimSensitivity: 0.002,
   maxPitch: 0.6,        // Vertical aim range (radians)
   maxYaw: 1.05,         // Horizontal aim (radians, ~60°)
-  basePitch: 0.5,       // Default camera angle (~29° up)
+  basePitch: 0.15,      // Default camera angle (~8.5° up)
   height: 5,            // Camera Y position
   zPosition: -50,       // Camera Z position
-  fireRate: 0.4,        // Seconds between shots
+  fireRate: 0.3,        // Seconds between shots
 },
 
 projectiles: {
@@ -112,19 +125,27 @@ shields: {
   height_y: 0,          // Ground level
   spacing: 50,          // Horizontal spacing
   voxelSize: 2,
+  playerDamageRadius: 1,
 },
 
 gameplay: {
-  lives: 3,
-  hitsPerLife: 20,
+  lives: 5,
+  hitsPerLife: 20,        // Damage points before losing a life
   speedMultiplierMin: 0.3,
-  dangerDistance: 100,  // Game over trigger
+  dangerDistance: 100,    // Game over trigger (aliens reach shields)
 },
 
 timing: {
-  baseMoveInterval: 55,         // Frames at 60fps
-  alienShootChanceBase: 0.005,  // Wave 1
-  alienShootChanceMax: 0.05,    // Wave 100
+  baseMoveInterval: 55,          // Frames at 60fps
+  alienShootChanceBase: 0.005,   // Wave 1
+  alienShootChanceMax: 0.05,     // Wave 100
+},
+
+visual: {
+  backgroundColor: 0x001100,
+  fov: 75,
+  nearPlane: 0.1,
+  farPlane: 1000,
 },
 
 touch: {
@@ -140,16 +161,16 @@ touch: {
 ### Alien (Alien.ts)
 
 **Sprite Patterns**: Defined as 2D arrays (1 = filled, 0 = empty)
-- Squid: 8x8 pixels
-- Crab: 11x8 pixels
-- Bug: 12x8 pixels
+- Squid: 8x8 pixels (back rows, can dive bomb)
+- Crab: 11x8 pixels (front row)
+- Bug: 12x8 pixels (middle rows)
 
 **Resolution Multiplier**: Each sprite pixel = 2x2 voxels (RESOLUTION_MULTIPLIER = 2)
 
-**Colors** (ALIEN_COLORS constant):
-- Crab (front): Yellow `{ r: 255, g: 255, b: 0 }`
-- Bug (middle): Cyan `{ r: 0, g: 255, b: 255 }`
-- Squid (back): Hot pink `{ r: 255, g: 0, b: 128 }`
+**Colors** (green theme):
+- Crab (front): Bright green `0x00ff00`
+- Bug (middle): Medium green `0x00dd00`
+- Squid (back): Dark green `0x00bb00`
 
 **Brightness System**:
 - Front alien in column = 1.0 (full brightness)
@@ -157,10 +178,10 @@ touch: {
 - Minimum brightness = 0.3
 - Recalculated via `updateBrightness(aliensInFront)` when aliens die
 
-**Key Methods**:
-- `animate()`: Toggles between 2 animation frames
-- `getCurrentColor()`: Returns current color for explosions
-- `getBoundingSphere()`: For collision detection
+**Dive Bomber** (Squid type only):
+- States: `NONE`, `DIVING`, `RETURNING`
+- Tracks `diveProgress`, `diveStartPos`, `diveTargetX`
+- Can fire strafing shots during dive
 
 ### AlienFormation (AlienFormation.ts)
 
@@ -172,14 +193,24 @@ touch: {
 **Shooting**:
 - Only frontmost alien per column can shoot (`getFrontAliens()`)
 - `shootChance` scales linearly: wave 1 = 0.5%, wave 100 = 5%
-- Direction: No horizontal tracking, only vertical angle to reach player height
-  ```typescript
-  const direction = new THREE.Vector3(0, dy, dz).normalize();
-  ```
+- Direction: Vertical angle to reach player height
 
-**Wave Reset**:
-- `waveMultiplier = 1 + (wave - 1) * 0.2` (affects movement speed)
-- Calculates `shootChance` based on wave progress
+**Dive Attacks** (Wave 2+):
+- Only squid (back row) aliens can dive
+- Dive bomber flies toward player position with wave motion
+- Fires strafing shots during dive (interval scales with wave)
+- Returns to formation after reaching retreat point
+- Max concurrent divers: 1 (wave 2) → 5 (wave 100)
+- Dive interval: 3-8s (wave 2) → 0.8-2s (wave 100)
+
+**Wave Intro**:
+- `startIntro()`: Aliens fly in from far distance
+- `updateIntro()`: Returns true when all aliens in position
+- Saucer sound plays during intro
+
+**Invasion Landing**:
+- `startLanding()`: Triggered when aliens reach danger zone
+- `updateLanding()`: Aliens descend to ground, game over when complete
 
 ### Shield (Shield.ts)
 
@@ -193,31 +224,17 @@ touch: {
 - Cyan `(0, 0.8, 1)`: healthRatio > 0.3
 - Dark blue `(0.2, 0.2, 0.8)`: critical
 
-**Hit Detection** (`checkHit()`):
-- Transforms point to local untilted space
-- Searches 2-voxel radius for closest alive voxel
-- Returns world position for explosion effect
-
 ### PlayerTurret (PlayerTurret.ts)
 
 **Camera Setup**:
 - Position: `(0, height, zPosition)` = `(0, 5, -50)`
 - Rotation order: 'YXZ' (yaw, pitch, roll - standard FPS)
-- Base pitch: 0.5 radians (~29° up)
+- Base pitch: 0.15 radians (~8.5° up)
 
 **Turret Mesh** (solid grey 0x888888):
 - Base: Cylinder (radius 6→8, height 3)
 - Barrel: Box (2×2×12) at y=4, z=-6
 - Side panels: Two angled boxes
-
-**Aiming Limits**:
-- Horizontal (yaw): ±0.14 radians (~8°)
-- Vertical (pitch): basePitch ± maxPitch = 0.5 ± 0.6 radians
-
-**Key Methods**:
-- `getTurretPosition()`: Returns mesh center for explosions
-- `hideTurret()`/`showTurret()`: For life lost sequence
-- `fire()`: Returns `{ position, direction }` based on camera quaternion
 
 ### Projectile (Projectile.ts)
 
@@ -225,34 +242,12 @@ touch: {
 - Geometry: Cylinder (radius 0.3, height 3)
 - Color: Green (0x00ff00)
 - Speed: 150 units/s
-- Rotated to face direction of travel
 
 **Alien Shots**:
 - Geometry: Sphere (radius 0.5)
 - Color: Red (0xff0000)
 - Speed: 80 units/s
-- Rotating visual effect
-
-**Shot Types** (AlienShotType): 'rolling' | 'plunger' | 'squiggly'
-- Currently visual only (same behavior)
-
-## Collision System (CollisionSystem.ts)
-
-**Player shots check**:
-1. Aliens (sphere-sphere)
-2. Shields (bounding box → voxel hit)
-
-**Alien shots check**:
-1. Shields (bounding box → voxel hit)
-2. Player (horizontal distance only, 8-unit radius)
-
-Player hit detection ignores Y (infinite vertical hit area):
-```typescript
-const horizontalDist = Math.sqrt(
-  Math.pow(pos.x - playerPos.x, 2) +
-  Math.pow(pos.z - playerPos.z, 2)
-);
-```
+- Shot Types: 'rolling' | 'plunger' | 'squiggly' (visual only)
 
 ## Input System (InputManager.ts, TouchInputManager.ts)
 
@@ -261,13 +256,20 @@ const horizontalDist = Math.sqrt(
 - W/S or Arrow Up/Down: Forward/back movement
 - Mouse: Aim (only when pointer locked)
 - Left click: Fire
-- Any key: Start game from menu
-- SPACE: Restart from game over
+- Space bar: Fire (when pointer locked)
+- Any key/click: Start game, continue after life lost/game over
 
-**Pointer Lock** (Desktop):
-- Requested on game start and after continuing
+**Pointer Lock** (WebKit Compatible):
+- Uses `webkitPointerLockElement` and `webkitRequestPointerLock()` fallbacks
+- Listens for both `pointerlockchange` and `webkitpointerlockchange` events
 - Mouse delta accumulated between frames
 - Input cleared when lock lost
+
+**External Input Detection** (Mobile with keyboard/trackpad):
+- Detects mouse movement on mobile devices
+- Sets `_useExternalInput` flag on first real mouse movement
+- Allows pointer lock to be requested on mobile when external input detected
+- Touch controls hidden when using external input
 
 **Mobile Detection**:
 ```typescript
@@ -276,63 +278,49 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
   || (navigator.maxTouchPoints > 0);
 ```
 
-**Touch Input Injection**:
-- `setTouchMoveInput(x, y)`: Joystick values (-1 to 1)
-- `setTouchAimDelta(dx, dy)`: Accumulated like mouse movement
-- `setTouchFiring(firing)`: Fire state from touch
-
 **TouchInputManager** (Mobile):
-- Virtual joystick on left 30% of screen
-- Aim+fire zone on right 70% - touching aims AND fires simultaneously
+- Virtual joystick on left side of screen
+- Aim zone on right side - drag to aim
+- Tap on joystick OR aim zone to fire
 - Multi-touch tracking via `touch.identifier`
 - Joystick uses deadzone (0.1) and clamps to radius
 
-**Mobile Layout**:
-- Game area right-aligned at 70% width
-- Joystick zone on left 30%
-- Start screen centered (fixed position, full viewport)
-- No bevel/frame on mobile
-- Auto-fullscreen on game start
-- Forces landscape orientation when phone is in portrait (CSS rotate)
+**Joystick Repositioning**:
+- Long-press (500ms) on joystick to enter reposition mode
+- Drag to move joystick anywhere on screen
+- Position saved to localStorage as percentage
+- Persists across sessions
+- Clamped to screen bounds on resize
 
 ## Audio System (AudioManager.ts)
+
+**iOS Safari Unlock**:
+- AudioContext starts suspended
+- `unlock()` method resumes context and plays silent buffer
+- Called on first user interaction (click/touch)
+- Uses `webkitAudioContext` fallback for older Safari
 
 **March Beat**:
 - 4 notes: A1 (55Hz), G1 (49Hz), F#1 (46Hz), E1 (41Hz)
 - Square wave, 0.15 volume
-- Tempo: `minTempo + (maxTempo - minTempo) * (aliveCount / maxAliens)`
-- Range: 100ms (1 alien) to 1000ms (55 aliens)
+- Tempo: 100ms (1 alien) to 1000ms (50 aliens)
 
-**Alien Death** (`playAlienDeath()`):
-- White noise buffer with cubic decay
-- Low-pass filter: 1500Hz → 300Hz
-- Duration: 0.15s, Volume: 0.25
-
-**Life Lost** (`playLifeLost()`):
-- Descending tones: 400Hz → 300Hz → 200Hz → 100Hz
-- Square wave, 0.15 volume, 0.2s each
-
-**Wave Complete** (`playWaveComplete()`):
-- Ascending tones: 440Hz → 554Hz → 659Hz → 880Hz
-- Square wave, 0.2 volume
-
-**Game Over** (`playGameOver()`):
-- Descending tones: 440Hz → 330Hz → 262Hz → 196Hz
-
-**Disabled** (too noisy): `playPlayerShoot()`, `playAlienShoot()`, `playPlayerHit()`, `playShieldHit()`
+**Sound Effects**:
+| Sound | Status | Description |
+|-------|--------|-------------|
+| `playPlayerShoot()` | Enabled | Punchy sci-fi laser (sawtooth sweep + thump + noise) |
+| `playAlienShoot()` | Disabled | Too noisy |
+| `playAlienDeath()` | Enabled | Noise burst with low-pass filter |
+| `playLifeLost()` | Enabled | ~5s melancholic tune |
+| `playWaveComplete()` | Enabled | ~5s triumphant fanfare |
+| `playGameOver()` | Enabled | ~5s sad dirge |
+| `playWaveIntro()` | Enabled | ~4s quirky "here they come" tune |
+| `playTurretShieldHit()` | Enabled | Big crunch sound (turret shot hits shield) |
+| `playShieldHit()` | Disabled | Too noisy (alien shots) |
+| `playPlayerHit()` | Disabled | Too noisy |
+| `startSaucerSound()` | Enabled | UFO warble (sine + LFO modulation) |
 
 ## Explosion System (ExplosionEffect.ts)
-
-**Particle Interface**:
-```typescript
-interface Particle {
-  mesh: THREE.Mesh | THREE.Line;
-  velocity: THREE.Vector3;
-  life: number;
-  maxLife: number;
-  rotationSpeed?: THREE.Vector3;
-}
-```
 
 **Alien Explosion** (`createAlienExplosion()`):
 1. White flash sphere (radius 5, life 0.1s)
@@ -344,17 +332,13 @@ interface Particle {
 - 12 blue debris cubes (0x0088ff)
 - Speed 15-35, life 0.4-0.7s
 
+**Turret Shield Impact** (`createTurretShieldImpact()`):
+- Larger explosion when player shot hits own shield
+
 **Turret Explosion** (`createTurretExplosion()`):
 1. White flash sphere (radius 8, life 0.15s)
 2. 30 grey debris cubes (0x888888, speed 30-70, biased upward)
 3. 15 orange fire particles (0xff4400, upward bias)
-
-**Update Loop**:
-- Applies gravity: `velocity.y -= 40 * deltaTime`
-- Applies rotation for debris
-- Fades opacity based on life ratio
-- Expands stationary elements, shrinks moving debris
-- Cleans up dead particles
 
 **Key Method**: `hasActiveParticles()` - Used to wait for explosions before showing messages
 
@@ -362,18 +346,15 @@ interface Particle {
 
 **Scene Setup**:
 - Background: 0x001100 (dark green)
-- Ambient light: 0x004400, intensity 0.5
-- Directional light: 0x00ff00, intensity 0.8, from (0, 100, -100)
+- Ambient light: 0xffffff, intensity 0.6
+- Main directional light: 0xffffff, intensity 1.0, from (0, 100, 100)
+- Rim light: 0x4488ff, intensity 0.4, from (0, 50, -200)
 
-**Vector Grid Ground**:
-- 500×500 units, 25 divisions
-- Dark green lines (0x004400, opacity 0.6)
-- Bright boundary lines at ±111 (0x00ff00, opacity 0.4)
-
-**Star Field**:
-- 1000 points in upper hemisphere
-- Radius 400-500, offset upward and back
-- Green color (0x00ff00), size 1.5
+**Forest Environment**:
+- Tree silhouettes at horizon and sides (cones + cylinders)
+- Back treeline: 100 trees, Z=-750 to -850, height 140-220
+- Side treelines: 40 trees each, height 60-100
+- Star field in upper hemisphere (1000 points)
 
 **CRT Post-Processing** (CRTEffect.ts):
 - UnrealBloomPass: strength 0.5, radius 0.4, threshold 0.85
@@ -385,93 +366,70 @@ interface Particle {
   - barrelDistortion: 0.04
   - time: animated for flicker
 
+**FOV Adjustment**:
+- Reference: 6:4 aspect (1.5) with 75° vertical FOV
+- Adjusts FOV to maintain consistent horizontal view across aspect ratios
+
+## Mobile / PWA
+
+**Orientation Handling**:
+1. Try `screen.orientation.lock('landscape')` (PWA/fullscreen only)
+2. If lock succeeds, add `orientation-locked` class
+3. If lock fails, show rotate overlay when in portrait
+4. Game pauses in `ROTATE_DEVICE` state, resumes when landscape
+
+**Rotate Overlay**:
+- Full-screen black overlay with animated phone icon
+- "Please rotate your device to landscape" message
+- Created dynamically in `createRotateOverlay()`
+
+**Fullscreen**:
+- Requested on game start (mobile)
+- Uses `webkitRequestFullscreen` fallback
+
+**PWA Manifest** (public/manifest.json):
+```json
+{
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#00ff88"
+}
+```
+
 ## UI Elements (index.html)
 
 **Container**: `#game-container`
 - 6:4 aspect ratio via CSS `aspect-ratio`
 - 1984-style monitor surround (wood-tone gradient border)
-- "SPACE INVADERS" embossed title via `::before`
-- Screen reflection overlay via `::after`
+- "FOREST PESTS" embossed title
+- Screen reflection overlay
 
 **Overlay Elements** (`#ui-overlay`):
-- `#score-display`: Top-left, "SCORE: 0000"
-- `#lives-display`: Top-right, "LIVES: 3"
-- `#wave-display`: Below score, "WAVE: 1"
+- `#score-display`: Top-left
+- `#hud-right`: Top-right, life icons (tree emojis)
+- `#wave-display`: Below score
 - `#health-bar-container`: Bottom center, 300px wide
 - `#crosshair`: Center, 40px circle with cross
 - `#game-message`: Center, for game state messages
-- `#start-prompt`: Bottom, "PRESS SPACE TO START"
+- `#start-screen`: Start screen with title and controls info
 - `#damage-overlay`: Full screen red flash
 
-**Responsive Sizing** (vmin units):
-```css
-#game-message {
-  font-size: 4vmin;
-  padding: 2vmin 4vmin;
-  border: 0.3vmin solid rgba(255, 255, 255, 0.7);
-  background: rgba(128, 128, 128, 0.7);
-}
-```
-
-**Animations**:
-- `@keyframes blink`: Start prompt pulsing
-- `@keyframes damageFlash`: Red screen flash
-- `@keyframes shake`: Screen shake on damage
-- `@keyframes pulse-critical`: Health bar pulse when critical
+**Touch Controls** (`#touch-controls`):
+- `#joystick-zone`: Contains base and knob, repositionable
+- `#aim-zone`: Right side touch area
+- Visual feedback: `.firing` class on joystick, `.repositioning` class during move
 
 ## Wave Progression (100 Waves)
 
-| Wave | Shield Voxel Health | Alien Fire Rate | Wave Speed Multiplier |
-|------|---------------------|-----------------|----------------------|
-| 1    | 3 hits              | 0.5%            | 1.0x                 |
-| 25   | 2-3 hits            | 1.7%            | 5.8x                 |
-| 50   | 2 hits              | 2.75%           | 10.8x                |
-| 75   | 1-2 hits            | 3.9%            | 15.8x                |
-| 100  | 1 hit               | 5%              | 20.8x                |
-
-Shield health formula:
-```typescript
-const waveProgress = Math.min((wave - 1) / 99, 1);
-const shieldHealth = Math.max(1, Math.round(3 - 2 * waveProgress));
-```
-
-## Field of Play Calculation
-
-```
-4 shields at spacing 50 → span of 150 (-75 to +75)
-Shield width = 24
-Field edge = 75 + 12 (half shield) + 24 (one shield width) = 111
-Player strafe limit = 111
-Alien edge margin = 111
-```
-
-## Common Patterns
-
-**Creating Three.js Objects**:
-```typescript
-const geometry = new THREE.BoxGeometry(w, h, d);
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-const mesh = new THREE.Mesh(geometry, material);
-scene.add(mesh);
-```
-
-**Cleanup Pattern**:
-```typescript
-destroy(scene: THREE.Scene): void {
-  scene.remove(this.mesh);
-  this.mesh.geometry.dispose();
-  (this.mesh.material as THREE.Material).dispose();
-}
-```
-
-**InstancedMesh for Voxels**:
-```typescript
-const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
-const matrix = new THREE.Matrix4();
-matrix.setPosition(x, y, z);
-instancedMesh.setMatrixAt(index, matrix);
-instancedMesh.instanceMatrix.needsUpdate = true;
-```
+| Wave | Shield Voxel Health | Alien Fire Rate | Dive Interval | Max Divers |
+|------|---------------------|-----------------|---------------|------------|
+| 1    | 3 hits              | 0.5%            | No diving     | 0          |
+| 2    | 3 hits              | 0.6%            | 3-8s          | 1          |
+| 25   | 2-3 hits            | 1.7%            | 2.2-5.5s      | 2          |
+| 50   | 2 hits              | 2.75%           | 1.5-4s        | 3          |
+| 75   | 1-2 hits            | 3.9%            | 1.1-2.8s      | 4          |
+| 100  | 1 hit               | 5%              | 0.8-2s        | 5          |
 
 ## Development Commands
 
@@ -479,8 +437,8 @@ instancedMesh.instanceMatrix.needsUpdate = true;
 npm install                    # Install dependencies
 npm run dev                    # Start dev server (Vite)
 npm run dev -- --host          # Dev server on all interfaces (for mobile testing)
-npm run dev -- --host --https  # Dev server with HTTPS (requires @vitejs/plugin-basic-ssl)
 npm run build                  # Production build to dist/
+npm run preview                # Preview production build
 ```
 
 ## Deployment
