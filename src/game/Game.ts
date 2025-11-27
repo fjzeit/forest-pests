@@ -265,6 +265,9 @@ export class Game {
     this.audioManager.unlock();
 
     this.state = GameState.WAVE_INTRO;
+    // Hide cursor during gameplay for better immersion, even when pointer
+    // lock is not available or fails.
+    document.body.style.cursor = 'none';
     this.startPrompt.style.display = 'none';
     this.messageElement.style.display = 'none';
     this.crosshair.style.display = 'block';
@@ -442,6 +445,8 @@ export class Game {
       if (this.continueInputDelay > 0) {
         this.continueInputDelay -= deltaTime;
       }
+      // In game over state, show cursor again for menu interaction
+      document.body.style.cursor = 'default';
     } else if (this.state === GameState.INVASION_LANDING) {
       // Update the alien landing animation
       const landingComplete = this.alienFormation.updateLanding(deltaTime);

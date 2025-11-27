@@ -9,6 +9,7 @@ export class InputManager {
   private mouseMovement = { x: 0, y: 0 };
   private mouseButtons: Set<number> = new Set();
   private fireQueue: number = 0;  // Number of shots queued
+  private lastMousePos: { x: number; y: number } | null = null;
 
   // Cached movement flags (avoid Set.has lookups every frame)
   private moveLeft = false;
@@ -61,8 +62,8 @@ export class InputManager {
     else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.moveRight = true;
     else if (e.code === 'KeyW' || e.code === 'ArrowUp') this.moveUp = true;
     else if (e.code === 'KeyS' || e.code === 'ArrowDown') this.moveDown = true;
-    // Space bar to fire (when pointer locked)
-    else if (e.code === 'Space' && getPointerLockElement()) {
+    // Space bar to fire (works even without pointer lock support)
+    else if (e.code === 'Space') {
       this.fireQueue = 1;
     }
   }
@@ -82,16 +83,30 @@ export class InputManager {
   }
 
   private onMouseMove(e: MouseEvent): void {
-    if (getPointerLockElement()) {
-      this.mouseMovement.x += e.movementX;
-      this.mouseMovement.y += e.movementY;
+    // Pointer lock (where supported) gives unbounded deltas via movementX/Y.
+    // Some browsers without pointer lock report zero movement deltas, so we
+    // fall back to computing them from clientX/Y in that case.
+    let dx = e.movementX;
+    let dy = e.movementY;
+
+    if (!getPointerLockElement()) {
+      if (dx === 0 && dy === 0 && this.lastMousePos) {
+        dx = e.clientX - this.lastMousePos.x;
+        dy = e.clientY - this.lastMousePos.y;
+      }
+      this.lastMousePos = { x: e.clientX, y: e.clientY };
+    } else {
+      this.lastMousePos = null;
     }
+
+    this.mouseMovement.x += dx;
+    this.mouseMovement.y += dy;
   }
 
   private onMouseDown(e: MouseEvent): void {
     this.mouseButtons.add(e.button);
-    // Trigger single shot on click
-    if (e.button === 0 && getPointerLockElement()) {
+    // Trigger single shot on click (works even without pointer lock support)
+    if (e.button === 0) {
       this.fireQueue = 1;
     }
   }
