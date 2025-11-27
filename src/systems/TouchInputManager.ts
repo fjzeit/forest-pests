@@ -16,6 +16,10 @@ interface TouchPoint {
 const TAP_MAX_DURATION = 200;  // ms - max time for a tap
 const TAP_MAX_DISTANCE = 15;   // px - max movement for a tap
 
+// Long press for repositioning
+const LONG_PRESS_DURATION = 500;  // ms - time to trigger long press
+const STORAGE_KEY = 'joystickPosition';
+
 export class TouchInputManager {
   private inputManager: InputManager;
 
@@ -30,6 +34,11 @@ export class TouchInputManager {
   private joystickTouch: TouchPoint | null = null;
   private aimTouch: TouchPoint | null = null;
   private isMoving = false;  // Track if we've committed to movement
+
+  // Repositioning state
+  private isRepositioning = false;
+  private longPressTimer: number | null = null;
+  private repositionOffset = { x: 0, y: 0 };  // Offset from touch to zone corner
 
   // Joystick config
   private joystickRadius: number;
@@ -52,6 +61,70 @@ export class TouchInputManager {
     this.aimZone = document.getElementById('aim-zone')!;
 
     this.bindEvents();
+    this.loadSavedPosition();
+
+    // Ensure joystick stays on screen after resize
+    window.addEventListener('resize', () => this.clampToScreen());
+  }
+
+  private loadSavedPosition(): void {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const pos = JSON.parse(saved);
+        // Convert from percentages to actual position
+        this.joystickZone.style.right = 'auto';
+        this.joystickZone.style.bottom = 'auto';
+        this.joystickZone.style.left = `${pos.leftPercent}%`;
+        this.joystickZone.style.top = `${pos.topPercent}%`;
+      }
+    } catch (e) {
+      // Ignore errors, use default position
+    }
+  }
+
+  private savePosition(): void {
+    const rect = this.joystickZone.getBoundingClientRect();
+    const pos = {
+      leftPercent: (rect.left / window.innerWidth) * 100,
+      topPercent: (rect.top / window.innerHeight) * 100
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+  }
+
+  // Ensure joystick stays within screen bounds after orientation change
+  private clampToScreen(): void {
+    const rect = this.joystickZone.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width;
+    const maxTop = window.innerHeight - rect.height;
+
+    let needsUpdate = false;
+    let newLeft = rect.left;
+    let newTop = rect.top;
+
+    if (rect.left < 0) {
+      newLeft = 0;
+      needsUpdate = true;
+    } else if (rect.left > maxLeft) {
+      newLeft = maxLeft;
+      needsUpdate = true;
+    }
+
+    if (rect.top < 0) {
+      newTop = 0;
+      needsUpdate = true;
+    } else if (rect.top > maxTop) {
+      newTop = maxTop;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      this.joystickZone.style.right = 'auto';
+      this.joystickZone.style.bottom = 'auto';
+      this.joystickZone.style.left = `${newLeft}px`;
+      this.joystickZone.style.top = `${newTop}px`;
+      this.savePosition();
+    }
   }
 
   private bindEvents(): void {
@@ -78,6 +151,7 @@ export class TouchInputManager {
 
     const touch = e.changedTouches[0];
     const rect = this.joystickBase.getBoundingClientRect();
+    const zoneRect = this.joystickZone.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
 
@@ -93,7 +167,28 @@ export class TouchInputManager {
     };
 
     this.isMoving = false;
+    this.isRepositioning = false;
+
+    // Store offset from touch to zone's top-left for smooth repositioning
+    this.repositionOffset.x = touch.clientX - zoneRect.left;
+    this.repositionOffset.y = touch.clientY - zoneRect.top;
+
+    // Start long press timer
+    this.longPressTimer = window.setTimeout(() => {
+      this.enterRepositionMode();
+    }, LONG_PRESS_DURATION);
+
     this.updateJoystick();
+  }
+
+  private enterRepositionMode(): void {
+    this.isRepositioning = true;
+    this.isMoving = false;
+    // Reset joystick knob to center during repositioning
+    this.joystickKnob.style.transform = 'translate(0, 0)';
+    this.inputManager.setTouchMoveInput(0, 0);
+    // Add visual feedback
+    this.joystickZone.classList.add('repositioning');
   }
 
   private onJoystickMove(e: TouchEvent): void {
@@ -111,11 +206,44 @@ export class TouchInputManager {
     const dy = this.joystickTouch.currentY - this.joystickTouch.touchStartY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance > TAP_MAX_DISTANCE) {
+    if (this.isRepositioning) {
+      // Move the joystick zone to follow the touch
+      this.moveJoystickTo(touch.clientX, touch.clientY);
+    } else if (distance > TAP_MAX_DISTANCE) {
+      // Cancel long press timer if user starts moving
+      this.cancelLongPress();
       this.isMoving = true;
+      this.updateJoystick();
+    } else {
+      this.updateJoystick();
     }
+  }
 
-    this.updateJoystick();
+  private moveJoystickTo(touchX: number, touchY: number): void {
+    const zoneRect = this.joystickZone.getBoundingClientRect();
+
+    // Calculate new position, accounting for the offset from touch to zone corner
+    let newLeft = touchX - this.repositionOffset.x;
+    let newTop = touchY - this.repositionOffset.y;
+
+    // Clamp to screen bounds
+    const maxLeft = window.innerWidth - zoneRect.width;
+    const maxTop = window.innerHeight - zoneRect.height;
+    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    newTop = Math.max(0, Math.min(newTop, maxTop));
+
+    // Apply position
+    this.joystickZone.style.right = 'auto';
+    this.joystickZone.style.bottom = 'auto';
+    this.joystickZone.style.left = `${newLeft}px`;
+    this.joystickZone.style.top = `${newTop}px`;
+  }
+
+  private cancelLongPress(): void {
+    if (this.longPressTimer !== null) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
   }
 
   private updateJoystick(): void {
@@ -156,30 +284,40 @@ export class TouchInputManager {
 
     const touch = this.findTouch(e.changedTouches, this.joystickTouch.id);
     if (touch || e.type === 'touchcancel') {
-      // Check if this was a tap (fire) or drag (movement)
-      // Use distance from TOUCH START, not joystick center
-      const duration = Date.now() - this.joystickTouch.startTime;
-      const dx = this.joystickTouch.currentX - this.joystickTouch.touchStartX;
-      const dy = this.joystickTouch.currentY - this.joystickTouch.touchStartY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Cancel any pending long press
+      this.cancelLongPress();
 
-      const wasTap = duration < TAP_MAX_DURATION && distance < TAP_MAX_DISTANCE;
+      if (this.isRepositioning) {
+        // End repositioning - save position and remove visual feedback
+        this.savePosition();
+        this.joystickZone.classList.remove('repositioning');
+      } else {
+        // Check if this was a tap (fire) or drag (movement)
+        // Use distance from TOUCH START, not joystick center
+        const duration = Date.now() - this.joystickTouch.startTime;
+        const dx = this.joystickTouch.currentX - this.joystickTouch.touchStartX;
+        const dy = this.joystickTouch.currentY - this.joystickTouch.touchStartY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (wasTap && e.type !== 'touchcancel') {
-        // Fire once
-        this.inputManager.triggerFire();
-        // Visual feedback on both base and knob
-        this.joystickBase.classList.add('firing');
-        this.joystickKnob.classList.add('firing');
-        setTimeout(() => {
-          this.joystickBase.classList.remove('firing');
-          this.joystickKnob.classList.remove('firing');
-        }, 100);
+        const wasTap = duration < TAP_MAX_DURATION && distance < TAP_MAX_DISTANCE;
+
+        if (wasTap && e.type !== 'touchcancel') {
+          // Fire once
+          this.inputManager.triggerFire();
+          // Visual feedback on both base and knob
+          this.joystickBase.classList.add('firing');
+          this.joystickKnob.classList.add('firing');
+          setTimeout(() => {
+            this.joystickBase.classList.remove('firing');
+            this.joystickKnob.classList.remove('firing');
+          }, 100);
+        }
       }
 
       // Reset joystick
       this.joystickTouch = null;
       this.isMoving = false;
+      this.isRepositioning = false;
       this.joystickKnob.style.transform = 'translate(0, 0)';
       this.inputManager.setTouchMoveInput(0, 0);
     }
@@ -212,6 +350,10 @@ export class TouchInputManager {
     const touch = this.findTouch(e.changedTouches, this.aimTouch.id);
     if (!touch) return;
 
+    // Update current position for tap detection
+    this.aimTouch.currentX = touch.clientX;
+    this.aimTouch.currentY = touch.clientY;
+
     // Calculate delta since last frame
     const deltaX = touch.clientX - this.lastAimX;
     const deltaY = touch.clientY - this.lastAimY;
@@ -229,6 +371,18 @@ export class TouchInputManager {
 
     const touch = this.findTouch(e.changedTouches, this.aimTouch.id);
     if (touch || e.type === 'touchcancel') {
+      // Check if this was a tap (fire) - quick touch without much movement
+      const duration = Date.now() - this.aimTouch.startTime;
+      const dx = this.aimTouch.currentX - this.aimTouch.touchStartX;
+      const dy = this.aimTouch.currentY - this.aimTouch.touchStartY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      const wasTap = duration < TAP_MAX_DURATION && distance < TAP_MAX_DISTANCE;
+
+      if (wasTap && e.type !== 'touchcancel') {
+        this.inputManager.triggerFire();
+      }
+
       this.aimTouch = null;
     }
   }

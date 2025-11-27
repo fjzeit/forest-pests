@@ -35,7 +35,7 @@ export const GameConfig = {
     aimSensitivity: 0.002, // Mouse sensitivity
     maxPitch: 0.6,         // Max vertical aim (radians from base)
     maxYaw: 1.05,          // Max horizontal aim (radians, ~60 degrees)
-    basePitch: 0.5,        // Base camera pitch (~29 degrees up)
+    basePitch: 0.15,       // Base camera pitch (~8.5 degrees up, aligned with alien formation)
     height: 5,             // Camera height
     zPosition: -50,        // Z position (50% closer to shields)
     fireRate: 0.3,         // Minimum seconds between shots (25% faster)

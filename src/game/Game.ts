@@ -174,6 +174,9 @@ export class Game {
   }
 
   private startGame(): void {
+    // Explicitly unlock audio on game start (required for iOS Safari)
+    this.audioManager.unlock();
+
     this.state = GameState.WAVE_INTRO;
     this.startPrompt.style.display = 'none';
     this.messageElement.style.display = 'none';
@@ -187,6 +190,12 @@ export class Game {
       // Desktop: request pointer lock
       document.body.requestPointerLock();
     }
+
+    // Recalculate viewport/FOV now that game is starting (fixes PWA issues)
+    this.sceneManager.recalculateViewport();
+    // Also recalculate after a delay in case fullscreen changes dimensions
+    setTimeout(() => this.sceneManager.recalculateViewport(), 100);
+    setTimeout(() => this.sceneManager.recalculateViewport(), 300);
 
     // Start the fly-in intro sequence
     this.alienFormation.startIntro();
@@ -579,7 +588,7 @@ export class Game {
     this.messageElement.style.display = 'none';
     this.crosshair.style.display = 'block';
 
-    // Reset health and show turret
+    // Reset health, position and show turret
     this.currentHealth = GameConfig.gameplay.hitsPerLife;
     this.player.showTurret();
     this.player.reset();

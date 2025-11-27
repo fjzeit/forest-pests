@@ -6,6 +6,7 @@ export class AudioManager {
   private marchInterval: number | null = null;
   private marchNoteIndex: number = 0;
   private currentTempo: number = 1000; // ms between notes
+  private unlocked: boolean = false;
 
   // Classic march notes (approximation)
   private readonly marchNotes = [
@@ -17,24 +18,44 @@ export class AudioManager {
 
   constructor() {
     // Initialize audio context on first user interaction (click or touch)
+    // Use capture phase to ensure we get the event before it's prevented
     const initOnInteraction = () => {
-      this.initAudio();
-      // Remove both listeners after first interaction
-      document.removeEventListener('click', initOnInteraction);
-      document.removeEventListener('touchstart', initOnInteraction);
+      this.unlock();
     };
-    document.addEventListener('click', initOnInteraction);
-    document.addEventListener('touchstart', initOnInteraction);
+    document.addEventListener('click', initOnInteraction, { capture: true });
+    document.addEventListener('touchstart', initOnInteraction, { capture: true });
+    document.addEventListener('touchend', initOnInteraction, { capture: true });
   }
 
-  private initAudio(): void {
+  // Public method to unlock audio - can be called explicitly from game code
+  unlock(): void {
+    if (this.unlocked) return;
+
+    // Create context if needed
     if (!this.audioContext) {
-      this.audioContext = new AudioContext();
+      // Use webkitAudioContext for older Safari
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        this.audioContext = new AudioContextClass();
+      }
     }
-    // Resume if suspended (required for mobile)
+
+    if (!this.audioContext) return;
+
+    // Resume if suspended (required for iOS Safari)
     if (this.audioContext.state === 'suspended') {
       this.audioContext.resume();
     }
+
+    // Play a silent buffer to fully unlock audio on iOS Safari
+    // This is required because iOS won't actually enable audio until you play something
+    const silentBuffer = this.audioContext.createBuffer(1, 1, 22050);
+    const source = this.audioContext.createBufferSource();
+    source.buffer = silentBuffer;
+    source.connect(this.audioContext.destination);
+    source.start(0);
+
+    this.unlocked = true;
   }
 
   private playTone(
@@ -44,6 +65,10 @@ export class AudioManager {
     volume: number = 0.3
   ): void {
     if (!this.audioContext) return;
+    // Try to resume if suspended (can happen on iOS after tab switch)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
 
     const oscillator = this.audioContext.createOscillator();
     const gainNode = this.audioContext.createGain();
@@ -106,6 +131,9 @@ export class AudioManager {
   // Punchy sci-fi laser blast
   playPlayerShoot(): void {
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
 
     const now = this.audioContext.currentTime;
 
@@ -164,6 +192,9 @@ export class AudioManager {
   // Alien explosion sound - noise burst bang
   playAlienDeath(): void {
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
 
     const duration = 0.15;
 
@@ -202,6 +233,9 @@ export class AudioManager {
   // Life lost - moderately sad tune ~5 seconds
   playLifeLost(): void {
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
 
     const vol = 0.18;
 
@@ -236,6 +270,9 @@ export class AudioManager {
   // Turret shot hitting shield - big crunch sound
   playTurretShieldHit(): void {
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
 
     const duration = 0.2;
 
@@ -326,6 +363,9 @@ export class AudioManager {
   // Wacky intro tune - plays before aliens form up (~4 seconds)
   playWaveIntro(): void {
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
 
     const vol = 0.18;
 
@@ -384,6 +424,9 @@ export class AudioManager {
 
   startSaucerSound(): void {
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
     this.stopSaucerSound();
 
     // Create warbling UFO sound

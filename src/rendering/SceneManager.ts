@@ -15,11 +15,11 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(GameConfig.visual.backgroundColor);
 
-    // Get container dimensions
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
+    // Get container dimensions (use fallback if not ready yet - common in PWA)
+    let width = this.container.clientWidth || window.innerWidth;
+    let height = this.container.clientHeight || window.innerHeight;
 
-    // Create camera with 6:4 aspect ratio
+    // Create camera with reference aspect ratio initially
     this.camera = new THREE.PerspectiveCamera(
       GameConfig.visual.fov,
       width / height,
@@ -27,7 +27,7 @@ export class SceneManager {
       GameConfig.visual.farPlane
     );
 
-    // Position camera at player height, looking up at ~40 degrees
+    // Position camera at player height
     this.camera.position.set(0, GameConfig.player.height, 0);
     this.camera.rotation.order = 'YXZ'; // Yaw, Pitch, Roll - standard FPS order
 
@@ -36,6 +36,20 @@ export class SceneManager {
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.container.insertBefore(this.renderer.domElement, this.container.firstChild);
+
+    // Apply FOV adjustment for current aspect ratio
+    this.adjustFovForAspect(width / height);
+
+    // Re-check dimensions after layout is complete (important for PWA)
+    // Multiple checks to handle various PWA initialization timing
+    requestAnimationFrame(() => this.onWindowResize());
+    setTimeout(() => this.onWindowResize(), 100);
+    setTimeout(() => this.onWindowResize(), 500);
+
+    // Also check when page is fully loaded (for PWA cold start)
+    if (document.readyState !== 'complete') {
+      window.addEventListener('load', () => this.onWindowResize());
+    }
 
     // Add ambient light - brighter base illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -163,15 +177,40 @@ export class SceneManager {
     this.scene.add(stars);
   }
 
-  private onWindowResize(): void {
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
-    this.camera.aspect = width / height;
+  private adjustFovForAspect(aspect: number): void {
+    // Adjust FOV to maintain consistent apparent depth across aspect ratios
+    // Reference: 6:4 aspect (1.5) with 75 degree vertical FOV
+    const refAspect = 1.5;
+    const refFov = GameConfig.visual.fov;
+
+    // Calculate horizontal FOV for reference, then derive vertical FOV for current aspect
+    const refFovRad = refFov * Math.PI / 180;
+    const hFov = 2 * Math.atan(Math.tan(refFovRad / 2) * refAspect);
+    const newFovRad = 2 * Math.atan(Math.tan(hFov / 2) / aspect);
+    const newFov = newFovRad * 180 / Math.PI;
+
+    this.camera.fov = newFov;
+    this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+  }
+
+  private onWindowResize(): void {
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+
+    // Skip if dimensions are still invalid
+    if (width <= 0 || height <= 0) return;
+
+    this.adjustFovForAspect(width / height);
     this.renderer.setSize(width, height);
   }
 
   public render(): void {
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // Force recalculation of viewport/FOV (call on game start for PWA)
+  public recalculateViewport(): void {
+    this.onWindowResize();
   }
 }

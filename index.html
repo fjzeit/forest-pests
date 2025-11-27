@@ -140,7 +140,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0 3vmin;
+      padding: 0 max(3vmin, env(safe-area-inset-right, 0px)) 0 max(3vmin, env(safe-area-inset-left, 0px));
       font-family: 'Press Start 2P', 'Courier New', monospace;
     }
     #hud-left {
@@ -502,21 +502,28 @@
       border: 2px solid rgba(0, 255, 0, 0.7);
       box-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
       transition: background 0.1s, box-shadow 0.1s;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 8px;
-      color: rgba(0, 100, 0, 0.9);
-      text-shadow: 0 0 3px rgba(0, 255, 0, 0.5);
       touch-action: none;
     }
     #joystick-knob.firing {
       background: rgba(255, 100, 100, 0.7);
       border-color: rgba(255, 100, 100, 0.9);
       box-shadow: 0 0 20px rgba(255, 50, 50, 0.8);
-      color: rgba(100, 0, 0, 0.9);
-      text-shadow: 0 0 3px rgba(255, 100, 100, 0.5);
+    }
+
+    /* Repositioning mode visual feedback */
+    #joystick-zone.repositioning #joystick-base {
+      background: rgba(100, 150, 255, 0.25);
+      border-color: rgba(100, 150, 255, 0.7);
+      box-shadow: 0 0 25px rgba(100, 150, 255, 0.5);
+      animation: pulse-reposition 0.5s infinite;
+    }
+    #joystick-zone.repositioning #joystick-knob {
+      background: rgba(100, 150, 255, 0.5);
+      border-color: rgba(100, 150, 255, 0.8);
+    }
+    @keyframes pulse-reposition {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
     }
 
     /* Aim Zone - covers full screen behind joystick */
@@ -560,6 +567,15 @@
       #game-container::after {
         display: none;
       }
+      /* Adjust HUD for safe areas on curved/notched screens */
+      #hud-top {
+        top: calc(max(2vmin, env(safe-area-inset-top, 0px)) + 6vmin);
+        padding: 0 max(4vmin, env(safe-area-inset-right, 0px)) 0 max(4vmin, env(safe-area-inset-left, 0px));
+      }
+      #hud-bottom {
+        bottom: max(2vmin, env(safe-area-inset-bottom, 0px));
+        padding: 0 max(4vmin, env(safe-area-inset-right, 0px)) 0 max(4vmin, env(safe-area-inset-left, 0px));
+      }
       /* Start screen centered on full viewport */
       #start-screen {
         position: fixed;
@@ -569,6 +585,20 @@
         height: 100%;
         z-index: 3000;
         pointer-events: auto;
+      }
+      /* Keep header above start screen on mobile */
+      #game-header {
+        position: fixed;
+        z-index: 3100;
+        padding: 1.5vmin max(3vmin, env(safe-area-inset-right, 0px)) 1.5vmin max(3vmin, env(safe-area-inset-left, 0px));
+      }
+      /* Larger header text on start screen (mobile only) */
+      #game-header:has(~ #start-screen:not(.hidden)) a {
+        font-size: 3.5vmin;
+      }
+      #game-header:has(~ #start-screen:not(.hidden)) .header-links svg {
+        width: 4vmin;
+        height: 4vmin;
       }
       /* Hide desktop controls text, show mobile */
       .controls-desktop { display: none !important; }
@@ -637,8 +667,8 @@
           <div id="start-prompt">
             <div class="controls controls-desktop">WASD - MOVE</div>
             <div class="controls controls-desktop">MOUSE - AIM &amp; SHOOT</div>
-            <div class="controls controls-mobile">JOYSTICK - MOVE / TAP TO FIRE</div>
-            <div class="controls controls-mobile">DRAG SCREEN - AIM</div>
+            <div class="controls controls-mobile">JOYSTICK - MOVE</div>
+            <div class="controls controls-mobile">DRAG - AIM / TAP - FIRE</div>
             <div class="press-start controls-desktop">PRESS ANY KEY TO START</div>
             <div class="press-start controls-mobile">TAP TO START</div>
           </div>
@@ -652,7 +682,7 @@
     <div id="aim-zone"></div>
     <div id="joystick-zone">
       <div id="joystick-base">
-        <div id="joystick-knob">FIRE</div>
+        <div id="joystick-knob"></div>
       </div>
     </div>
   </div>
