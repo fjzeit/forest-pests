@@ -2,13 +2,12 @@ export class InputManager {
   private keys: Set<string> = new Set();
   private mouseMovement = { x: 0, y: 0 };
   private mouseButtons: Set<number> = new Set();
-  private _isFiring: boolean = false;
+  private fireQueue: number = 0;  // Number of shots queued
 
   // Mobile/touch support
   private _isMobile: boolean;
   private touchMoveInput = { x: 0, y: 0 };
   private touchAimDelta = { x: 0, y: 0 };
-  private touchFiring = false;
 
   constructor() {
     // Detect mobile device
@@ -45,16 +44,14 @@ export class InputManager {
 
   private onMouseDown(e: MouseEvent): void {
     this.mouseButtons.add(e.button);
-    if (e.button === 0) {
-      this._isFiring = true;
+    // Trigger single shot on click
+    if (e.button === 0 && document.pointerLockElement) {
+      this.fireQueue = 1;
     }
   }
 
   private onMouseUp(e: MouseEvent): void {
     this.mouseButtons.delete(e.button);
-    if (e.button === 0) {
-      this._isFiring = false;
-    }
   }
 
   private onPointerLockChange(): void {
@@ -62,7 +59,7 @@ export class InputManager {
       // Reset state when pointer lock is lost
       this.keys.clear();
       this.mouseButtons.clear();
-      this._isFiring = false;
+      this.fireQueue = 0;
     }
   }
 
@@ -75,8 +72,21 @@ export class InputManager {
     return this.keys.has(code);
   }
 
+  // Check if fire is pending (does NOT consume)
   isFiring(): boolean {
-    return this._isFiring || this.touchFiring;
+    return this.fireQueue > 0;
+  }
+
+  // Consume one shot from the queue (call after actually firing)
+  consumeFire(): void {
+    if (this.fireQueue > 0) {
+      this.fireQueue--;
+    }
+  }
+
+  // Trigger single shot (called by touch input and mouse)
+  triggerFire(): void {
+    this.fireQueue = 1;
   }
 
   getMoveInput(): { x: number; y: number } {
@@ -134,9 +144,5 @@ export class InputManager {
     // Accumulate delta like mouse movement
     this.touchAimDelta.x += dx;
     this.touchAimDelta.y += dy;
-  }
-
-  setTouchFiring(firing: boolean): void {
-    this.touchFiring = firing;
   }
 }

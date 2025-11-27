@@ -132,31 +132,56 @@
       font-family: 'Courier New', monospace;
       color: #00ff00;
     }
-    #hud-bottom {
+    #hud-top {
       position: absolute;
-      bottom: 2vmin;
+      top: 8vmin;
       left: 0;
       width: 100%;
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
+      align-items: center;
       padding: 0 3vmin;
       font-family: 'Press Start 2P', 'Courier New', monospace;
     }
+    #hud-left {
+      display: flex;
+      gap: 3vmin;
+      align-items: center;
+    }
+    #hud-right {
+      display: flex;
+      gap: 0.8vmin;
+      align-items: center;
+    }
     #score-display {
-      font-size: 1.8vmin;
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      font-size: 3vmin;
+      color: #00ff00;
       text-shadow: 0 0 0.5vmin #00ff00, 0 0 1vmin #00ff00;
-      letter-spacing: 0.1vmin;
+      letter-spacing: 0.2vmin;
     }
     #wave-display {
-      font-size: 1.5vmin;
+      font-size: 2.5vmin;
       text-shadow: 0 0 0.5vmin #00ff00, 0 0 1vmin #00ff00;
       letter-spacing: 0.1vmin;
     }
     #lives-display {
-      font-size: 1.8vmin;
-      text-shadow: 0 0 0.5vmin #00ff00, 0 0 1vmin #00ff00;
-      letter-spacing: 0.1vmin;
+      display: flex;
+      gap: 0.8vmin;
+      align-items: center;
+    }
+    .life-icon {
+      width: 2.5vmin;
+      height: 2.5vmin;
+      background: #00ff00;
+      border-radius: 50%;
+      box-shadow: 0 0 0.5vmin #00ff00, 0 0 1vmin #00ff00;
+      transition: opacity 0.3s, background 0.3s;
+    }
+    .life-icon.spent {
+      background: #333;
+      box-shadow: none;
+      opacity: 0.4;
     }
     #hud-center {
       display: flex;
@@ -164,10 +189,20 @@
       align-items: center;
       gap: 0.5vmin;
     }
+    #hud-bottom {
+      position: absolute;
+      bottom: 2vmin;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5vmin;
+    }
     #health-bar-container {
       position: relative;
-      width: 25vmin;
-      height: 1.5vmin;
+      width: 40vmin;
+      height: 2.5vmin;
       background: rgba(0, 50, 0, 0.5);
       border: 0.2vmin solid #00ff00;
       box-shadow: 0 0 1vmin #00ff00, inset 0 0 1vmin rgba(0, 255, 0, 0.2);
@@ -433,48 +468,11 @@
       display: none;
     }
 
-    /* Left controls container - joystick and fire button */
-    #left-controls {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 150px;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      align-items: center;
-      padding-bottom: 20px;
-      pointer-events: none;
-    }
-
-    /* Fire button - above joystick */
-    #fire-button {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: rgba(255, 50, 50, 0.25);
-      border: 3px solid rgba(255, 50, 50, 0.6);
-      color: #ff5555;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 10px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      text-shadow: 0 0 5px rgba(255, 50, 50, 0.8);
-      box-shadow: 0 0 15px rgba(255, 50, 50, 0.3);
-      margin-bottom: 20px;
-      pointer-events: auto;
-      touch-action: none;
-    }
-    #fire-button.active {
-      background: rgba(255, 100, 100, 0.5);
-      box-shadow: 0 0 25px rgba(255, 50, 50, 0.7);
-    }
-
-    /* Joystick Zone */
+    /* Joystick container - floating bottom-right */
     #joystick-zone {
-      position: relative;
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
       width: 120px;
       height: 120px;
       pointer-events: auto;
@@ -489,6 +487,12 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      transition: background 0.1s, border-color 0.1s;
+      touch-action: none;
+    }
+    #joystick-base.firing {
+      background: rgba(255, 100, 100, 0.25);
+      border-color: rgba(255, 100, 100, 0.6);
     }
     #joystick-knob {
       width: 50px;
@@ -497,15 +501,31 @@
       background: rgba(0, 255, 0, 0.5);
       border: 2px solid rgba(0, 255, 0, 0.7);
       box-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
+      transition: background 0.1s, box-shadow 0.1s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      color: rgba(0, 100, 0, 0.9);
+      text-shadow: 0 0 3px rgba(0, 255, 0, 0.5);
+      touch-action: none;
+    }
+    #joystick-knob.firing {
+      background: rgba(255, 100, 100, 0.7);
+      border-color: rgba(255, 100, 100, 0.9);
+      box-shadow: 0 0 20px rgba(255, 50, 50, 0.8);
+      color: rgba(100, 0, 0, 0.9);
+      text-shadow: 0 0 3px rgba(255, 100, 100, 0.5);
     }
 
-    /* Aim Zone - right side of screen (game area) */
+    /* Aim Zone - covers full screen behind joystick */
     #aim-zone {
       position: absolute;
       top: 0;
       right: 0;
       bottom: 0;
-      left: 150px;
+      left: 0;
       pointer-events: auto;
       touch-action: none;
     }
@@ -519,16 +539,16 @@
 
     /* Mobile-specific styles */
     @media (pointer: coarse) {
-      /* Right-align game, remove bevel */
+      /* Center game, fill screen */
       html, body {
-        justify-content: flex-end;
+        justify-content: center;
       }
       #game-container {
         touch-action: none;
         -webkit-touch-callout: none;
         -webkit-user-select: none;
         aspect-ratio: unset;
-        width: calc(100% - 150px);
+        width: 100%;
         height: 100%;
         max-width: none;
         max-height: none;
@@ -576,15 +596,24 @@
 <body>
   <div id="game-container">
     <div id="ui-overlay">
-      <div id="hud-bottom">
-        <div id="score-display">SCORE <span id="score">0000</span></div>
-        <div id="hud-center">
+      <div id="hud-top">
+        <div id="hud-left">
           <div id="wave-display">WAVE <span id="wave">1</span></div>
-          <div id="health-bar-container">
-            <div id="health-bar"></div>
-          </div>
         </div>
-        <div id="lives-display">LIVES <span id="lives">3</span></div>
+        <div id="hud-center"></div>
+        <div id="hud-right">
+          <div class="life-icon" data-life="1"></div>
+          <div class="life-icon" data-life="2"></div>
+          <div class="life-icon" data-life="3"></div>
+          <div class="life-icon" data-life="4"></div>
+          <div class="life-icon" data-life="5"></div>
+        </div>
+      </div>
+      <div id="hud-bottom">
+        <div id="score-display"><span id="score">0</span></div>
+        <div id="health-bar-container">
+          <div id="health-bar"></div>
+        </div>
       </div>
       <div id="crosshair"></div>
       <div id="game-message"></div>
@@ -608,7 +637,7 @@
           <div id="start-prompt">
             <div class="controls controls-desktop">WASD - MOVE</div>
             <div class="controls controls-desktop">MOUSE - AIM &amp; SHOOT</div>
-            <div class="controls controls-mobile">JOYSTICK - MOVE | FIRE BUTTON</div>
+            <div class="controls controls-mobile">JOYSTICK - MOVE / TAP TO FIRE</div>
             <div class="controls controls-mobile">DRAG SCREEN - AIM</div>
             <div class="press-start controls-desktop">PRESS ANY KEY TO START</div>
             <div class="press-start controls-mobile">TAP TO START</div>
@@ -618,17 +647,14 @@
       <div id="damage-overlay"></div>
     </div>
   </div>
-  <!-- Touch Controls outside game container for proper layout -->
+  <!-- Touch Controls - aim zone covers screen, joystick floats on top -->
   <div id="touch-controls" class="hidden">
-    <div id="left-controls">
-      <div id="fire-button">FIRE</div>
-      <div id="joystick-zone">
-        <div id="joystick-base">
-          <div id="joystick-knob"></div>
-        </div>
+    <div id="aim-zone"></div>
+    <div id="joystick-zone">
+      <div id="joystick-base">
+        <div id="joystick-knob">FIRE</div>
       </div>
     </div>
-    <div id="aim-zone"></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -67,7 +67,7 @@ export class Game {
   init(): void {
     // Get UI elements
     this.scoreElement = document.getElementById('score')!;
-    this.livesElement = document.getElementById('lives')!;
+    this.livesElement = document.getElementById('hud-right')!;
     this.waveElement = document.getElementById('wave')!;
     this.messageElement = document.getElementById('game-message')!;
     this.startPrompt = document.getElementById('start-screen')!;
@@ -279,6 +279,7 @@ export class Game {
       // Allow player to shoot during intro
       if (this.inputManager.isFiring() && this.player.canFire()) {
         this.firePlayerShot();
+        this.inputManager.consumeFire();
       }
 
       // Update projectiles
@@ -358,6 +359,7 @@ export class Game {
     // Handle player shooting
     if (this.inputManager.isFiring() && this.player.canFire()) {
       this.firePlayerShot();
+      this.inputManager.consumeFire();
     }
 
     // Get player position for dive targeting
@@ -568,7 +570,7 @@ export class Game {
 
   private showLifeLost(): void {
     this.state = GameState.LIFE_LOST;
-    this.showMessage('LIFE LOST', `LIVES: ${this.lives}`);
+    this.showMessage('LIFE LOST', '');
     this.lifeLostTuneTimer = 5.0; // Auto-continue after tune (~5 seconds)
   }
 
@@ -651,8 +653,16 @@ export class Game {
   }
 
   private updateUI(): void {
-    this.scoreElement.textContent = this.score.toString().padStart(4, '0');
-    this.livesElement.textContent = this.lives.toString();
+    this.scoreElement.textContent = this.score.toString();
+    // Update life icons
+    const lifeIcons = this.livesElement.querySelectorAll('.life-icon');
+    lifeIcons.forEach((icon, index) => {
+      if (index < this.lives) {
+        icon.classList.remove('spent');
+      } else {
+        icon.classList.add('spent');
+      }
+    });
     this.waveElement.textContent = this.wave.toString();
     this.updateHealthBar();
   }

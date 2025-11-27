@@ -3,11 +3,18 @@ import { GameConfig } from '../game/GameConfig';
 
 interface TouchPoint {
   id: number;
-  startX: number;
-  startY: number;
+  centerX: number;    // Joystick center (for movement calculation)
+  centerY: number;
+  touchStartX: number; // Actual touch start position (for tap detection)
+  touchStartY: number;
   currentX: number;
   currentY: number;
+  startTime: number;
 }
+
+// Tap detection thresholds
+const TAP_MAX_DURATION = 200;  // ms - max time for a tap
+const TAP_MAX_DISTANCE = 15;   // px - max movement for a tap
 
 export class TouchInputManager {
   private inputManager: InputManager;
@@ -18,11 +25,11 @@ export class TouchInputManager {
   private joystickBase: HTMLElement;
   private joystickKnob: HTMLElement;
   private aimZone: HTMLElement;
-  private fireButton: HTMLElement;
 
   // Touch tracking
   private joystickTouch: TouchPoint | null = null;
   private aimTouch: TouchPoint | null = null;
+  private isMoving = false;  // Track if we've committed to movement
 
   // Joystick config
   private joystickRadius: number;
@@ -43,31 +50,28 @@ export class TouchInputManager {
     this.joystickBase = document.getElementById('joystick-base')!;
     this.joystickKnob = document.getElementById('joystick-knob')!;
     this.aimZone = document.getElementById('aim-zone')!;
-    this.fireButton = document.getElementById('fire-button')!;
 
     this.bindEvents();
   }
 
   private bindEvents(): void {
-    // Joystick zone events
-    this.joystickZone.addEventListener('touchstart', (e) => this.onJoystickStart(e), { passive: false });
-    this.joystickZone.addEventListener('touchmove', (e) => this.onJoystickMove(e), { passive: false });
-    this.joystickZone.addEventListener('touchend', (e) => this.onJoystickEnd(e), { passive: false });
-    this.joystickZone.addEventListener('touchcancel', (e) => this.onJoystickEnd(e), { passive: false });
+    // Joystick events on zone, base, and knob (for full coverage)
+    const joystickElements = [this.joystickZone, this.joystickBase, this.joystickKnob];
+    joystickElements.forEach(el => {
+      el.addEventListener('touchstart', (e) => this.onJoystickStart(e), { passive: false });
+      el.addEventListener('touchmove', (e) => this.onJoystickMove(e), { passive: false });
+      el.addEventListener('touchend', (e) => this.onJoystickEnd(e), { passive: false });
+      el.addEventListener('touchcancel', (e) => this.onJoystickEnd(e), { passive: false });
+    });
 
-    // Aim zone events (aim only, no fire)
+    // Aim zone events
     this.aimZone.addEventListener('touchstart', (e) => this.onAimStart(e), { passive: false });
     this.aimZone.addEventListener('touchmove', (e) => this.onAimMove(e), { passive: false });
     this.aimZone.addEventListener('touchend', (e) => this.onAimEnd(e), { passive: false });
     this.aimZone.addEventListener('touchcancel', (e) => this.onAimEnd(e), { passive: false });
-
-    // Fire button events
-    this.fireButton.addEventListener('touchstart', (e) => this.onFireStart(e), { passive: false });
-    this.fireButton.addEventListener('touchend', (e) => this.onFireEnd(e), { passive: false });
-    this.fireButton.addEventListener('touchcancel', (e) => this.onFireEnd(e), { passive: false });
   }
 
-  // Joystick handlers
+  // Joystick handlers (combined movement + fire)
   private onJoystickStart(e: TouchEvent): void {
     e.preventDefault();
     if (this.joystickTouch) return; // Already tracking a touch
@@ -79,12 +83,16 @@ export class TouchInputManager {
 
     this.joystickTouch = {
       id: touch.identifier,
-      startX: centerX,
-      startY: centerY,
+      centerX: centerX,           // Joystick center for movement
+      centerY: centerY,
+      touchStartX: touch.clientX, // Actual touch position for tap detection
+      touchStartY: touch.clientY,
       currentX: touch.clientX,
-      currentY: touch.clientY
+      currentY: touch.clientY,
+      startTime: Date.now()
     };
 
+    this.isMoving = false;
     this.updateJoystick();
   }
 
@@ -98,15 +106,24 @@ export class TouchInputManager {
     this.joystickTouch.currentX = touch.clientX;
     this.joystickTouch.currentY = touch.clientY;
 
+    // Check if we've moved enough from TOUCH START to commit to movement
+    const dx = this.joystickTouch.currentX - this.joystickTouch.touchStartX;
+    const dy = this.joystickTouch.currentY - this.joystickTouch.touchStartY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > TAP_MAX_DISTANCE) {
+      this.isMoving = true;
+    }
+
     this.updateJoystick();
   }
 
   private updateJoystick(): void {
     if (!this.joystickTouch) return;
 
-    // Calculate displacement from center of joystick base
-    let dx = this.joystickTouch.currentX - this.joystickTouch.startX;
-    let dy = this.joystickTouch.currentY - this.joystickTouch.startY;
+    // Calculate displacement from center of joystick base (for visual + movement)
+    let dx = this.joystickTouch.currentX - this.joystickTouch.centerX;
+    let dy = this.joystickTouch.currentY - this.joystickTouch.centerY;
 
     // Clamp to radius
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -118,16 +135,19 @@ export class TouchInputManager {
     // Update knob visual position
     this.joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
 
-    // Normalize to -1 to 1 range
-    let normalX = dx / this.joystickRadius;
-    let normalY = -dy / this.joystickRadius; // Invert Y for game coords (up = positive)
+    // Only send movement if we've committed to moving
+    if (this.isMoving) {
+      // Normalize to -1 to 1 range
+      let normalX = dx / this.joystickRadius;
+      let normalY = -dy / this.joystickRadius; // Invert Y for game coords (up = positive)
 
-    // Apply deadzone
-    if (Math.abs(normalX) < this.deadzone) normalX = 0;
-    if (Math.abs(normalY) < this.deadzone) normalY = 0;
+      // Apply deadzone
+      if (Math.abs(normalX) < this.deadzone) normalX = 0;
+      if (Math.abs(normalY) < this.deadzone) normalY = 0;
 
-    // Send to InputManager
-    this.inputManager.setTouchMoveInput(normalX, normalY);
+      // Send to InputManager
+      this.inputManager.setTouchMoveInput(normalX, normalY);
+    }
   }
 
   private onJoystickEnd(e: TouchEvent): void {
@@ -136,13 +156,36 @@ export class TouchInputManager {
 
     const touch = this.findTouch(e.changedTouches, this.joystickTouch.id);
     if (touch || e.type === 'touchcancel') {
+      // Check if this was a tap (fire) or drag (movement)
+      // Use distance from TOUCH START, not joystick center
+      const duration = Date.now() - this.joystickTouch.startTime;
+      const dx = this.joystickTouch.currentX - this.joystickTouch.touchStartX;
+      const dy = this.joystickTouch.currentY - this.joystickTouch.touchStartY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      const wasTap = duration < TAP_MAX_DURATION && distance < TAP_MAX_DISTANCE;
+
+      if (wasTap && e.type !== 'touchcancel') {
+        // Fire once
+        this.inputManager.triggerFire();
+        // Visual feedback on both base and knob
+        this.joystickBase.classList.add('firing');
+        this.joystickKnob.classList.add('firing');
+        setTimeout(() => {
+          this.joystickBase.classList.remove('firing');
+          this.joystickKnob.classList.remove('firing');
+        }, 100);
+      }
+
+      // Reset joystick
       this.joystickTouch = null;
+      this.isMoving = false;
       this.joystickKnob.style.transform = 'translate(0, 0)';
       this.inputManager.setTouchMoveInput(0, 0);
     }
   }
 
-  // Aim handlers - touch to aim only
+  // Aim handlers
   private onAimStart(e: TouchEvent): void {
     e.preventDefault();
     if (this.aimTouch) return; // Already tracking
@@ -150,10 +193,13 @@ export class TouchInputManager {
     const touch = e.changedTouches[0];
     this.aimTouch = {
       id: touch.identifier,
-      startX: touch.clientX,
-      startY: touch.clientY,
+      centerX: touch.clientX,
+      centerY: touch.clientY,
+      touchStartX: touch.clientX,
+      touchStartY: touch.clientY,
       currentX: touch.clientX,
-      currentY: touch.clientY
+      currentY: touch.clientY,
+      startTime: Date.now()
     };
     this.lastAimX = touch.clientX;
     this.lastAimY = touch.clientY;
@@ -187,19 +233,6 @@ export class TouchInputManager {
     }
   }
 
-  // Fire button handlers
-  private onFireStart(e: TouchEvent): void {
-    e.preventDefault();
-    this.fireButton.classList.add('active');
-    this.inputManager.setTouchFiring(true);
-  }
-
-  private onFireEnd(e: TouchEvent): void {
-    e.preventDefault();
-    this.fireButton.classList.remove('active');
-    this.inputManager.setTouchFiring(false);
-  }
-
   // Utility
   private findTouch(touches: TouchList, id: number): Touch | null {
     for (let i = 0; i < touches.length; i++) {
@@ -218,10 +251,9 @@ export class TouchInputManager {
     // Reset all input when hiding
     this.joystickTouch = null;
     this.aimTouch = null;
+    this.isMoving = false;
     this.joystickKnob.style.transform = 'translate(0, 0)';
-    this.fireButton.classList.remove('active');
     this.inputManager.setTouchMoveInput(0, 0);
-    this.inputManager.setTouchFiring(false);
   }
 
   isVisible(): boolean {
