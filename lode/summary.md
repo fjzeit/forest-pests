@@ -308,16 +308,27 @@ this._isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 
 ## Audio System (AudioManager.ts)
 
-**iOS Safari Unlock**:
+**iOS Safari Unlock** (iOS 17-18+ compatible):
 - AudioContext starts suspended
-- `unlock()` method resumes context and plays silent buffer
-- Called on first user interaction (click/touch)
+- `unlock()` called on first user interaction (click/touch/touchend)
+- **Critical**: `playSilentBuffer()` must run **synchronously** during gesture, not in `.then()` callback
+- iOS blocks audio if first `node.start()` happens after gesture ends
+- Fix: Call `playSilentBuffer()` before/alongside `resume()` promise, plus `requestAnimationFrame` fallback
 - Uses `webkitAudioContext` fallback for older Safari
 
-**March Beat**:
+**ensureResumed() Helper**:
+- Called at start of every sound method
+- Resumes context if suspended, plays silent buffer as fallback
+- Handles iOS tab-switch re-suspension
+
+**March Beat** (iOS compatible):
 - 4 notes: A1 (55Hz), G1 (49Hz), F#1 (46Hz), E1 (41Hz)
 - Square wave, 0.15 volume
 - Tempo: 100ms (1 alien) to 1000ms (50 aliens)
+- **Lookahead scheduler**: Uses `requestAnimationFrame` + Web Audio scheduling
+- Notes scheduled 200ms ahead using `playToneAt()` with future `startTime`
+- iOS mutes sounds created inside setTimeout/setInterval callbacks
+- Fix: Never create oscillators in async callbacks, schedule them in advance
 
 **Sound Effects**:
 | Sound | Status | Description |

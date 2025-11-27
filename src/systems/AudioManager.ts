@@ -27,7 +27,7 @@ export class AudioManager {
     document.addEventListener('touchend', initOnInteraction, { capture: true });
   }
 
-  // Public method to unlock audio - can be called explicitly from game code
+  // Public method to unlock audio - MUST be called directly from a user gesture
   unlock(): void {
     if (this.unlocked) return;
 
@@ -45,13 +45,34 @@ export class AudioManager {
     // Mark as unlocked immediately to prevent multiple attempts
     this.unlocked = true;
 
-    // Resume if suspended (required for iOS Safari)
+    // === CRITICAL: Everything below MUST run synchronously in the gesture ===
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume().then(() => {
+      // Start resume (may be async on some browsers)
+      const resumePromise = this.audioContext.resume();
+
+      // Play silent buffer IMMEDIATELY (synchronously) - iOS requires this!
+      this.playSilentBuffer();
+
+      // Also handle case where resume() is truly async
+      resumePromise.then(() => {
         this.playSilentBuffer();
       });
     } else {
       this.playSilentBuffer();
+    }
+
+    // Extra insurance: play another silent tick after a frame
+    requestAnimationFrame(() => {
+      this.playSilentBuffer();
+    });
+  }
+
+  // Ensure audio context is resumed - call at start of sound methods
+  private ensureResumed(): void {
+    if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      const p = this.audioContext.resume();
+      if (p) p.then(() => this.playSilentBuffer());
     }
   }
 
@@ -70,21 +91,6 @@ export class AudioManager {
     source.buffer = silentBuffer;
     source.connect(this.audioContext.destination);
     source.start(0);
-  }
-
-  private playTone(
-    frequency: number,
-    duration: number,
-    type: OscillatorType = 'square',
-    volume: number = 0.3
-  ): void {
-    if (!this.audioContext) return;
-    // Try to resume if suspended (can happen on iOS after tab switch)
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-
-    this.playToneAt(frequency, duration, this.audioContext.currentTime, type, volume);
   }
 
   // Play a tone at a specific time using Web Audio scheduling (no setTimeout)
@@ -120,9 +126,7 @@ export class AudioManager {
     baseVolume: number = 0.2
   ): void {
     if (!this.audioContext) return;
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
+    this.ensureResumed();
 
     const baseTime = this.audioContext.currentTime;
     for (const note of notes) {
@@ -132,29 +136,41 @@ export class AudioManager {
   }
 
   // March beat - the iconic 4-note bassline
+  // Uses Web Audio lookahead scheduling (not setTimeout) for iOS compatibility
+  private nextMarchTime: number = 0;
+
   startMarch(): void {
     this.stopMarch();
     this.marchNoteIndex = 0;
-    this.playMarchNote();
+    if (this.audioContext) {
+      this.nextMarchTime = this.audioContext.currentTime + 0.05;
+      this.marchScheduler();
+    }
   }
 
-  private playMarchNote(): void {
-    if (!this.audioContext) {
-      this.marchInterval = window.setTimeout(() => this.playMarchNote(), this.currentTempo);
-      return;
+  // Lookahead scheduler - schedules notes ahead using Web Audio timing
+  // requestAnimationFrame only triggers the scheduling, nodes are created with future start times
+  private marchScheduler(): void {
+    if (!this.audioContext) return;
+
+    const now = this.audioContext.currentTime;
+    const beatDuration = this.currentTempo / 1000;
+
+    // Schedule notes up to 200ms ahead (iOS requires notes scheduled in advance)
+    while (this.nextMarchTime < now + 0.2) {
+      const note = this.marchNotes[this.marchNoteIndex];
+      this.playToneAt(note.freq, note.duration, this.nextMarchTime, 'square', 0.15);
+
+      this.marchNoteIndex = (this.marchNoteIndex + 1) % this.marchNotes.length;
+      this.nextMarchTime += beatDuration;
     }
 
-    const note = this.marchNotes[this.marchNoteIndex];
-    this.playTone(note.freq, note.duration, 'square', 0.15);
-
-    this.marchNoteIndex = (this.marchNoteIndex + 1) % this.marchNotes.length;
-
-    this.marchInterval = window.setTimeout(() => this.playMarchNote(), this.currentTempo);
+    this.marchInterval = requestAnimationFrame(() => this.marchScheduler()) as unknown as number;
   }
 
   stopMarch(): void {
     if (this.marchInterval !== null) {
-      clearTimeout(this.marchInterval);
+      cancelAnimationFrame(this.marchInterval);
       this.marchInterval = null;
     }
   }
@@ -173,9 +189,7 @@ export class AudioManager {
   // Punchy sci-fi laser blast
   playPlayerShoot(): void {
     if (!this.audioContext) return;
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
+    this.ensureResumed();
 
     const now = this.audioContext.currentTime;
 
@@ -234,9 +248,7 @@ export class AudioManager {
   // Alien explosion sound - noise burst bang
   playAlienDeath(): void {
     if (!this.audioContext) return;
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
+    this.ensureResumed();
 
     const duration = 0.15;
 
@@ -305,9 +317,7 @@ export class AudioManager {
   // Turret shot hitting shield - big crunch sound
   playTurretShieldHit(): void {
     if (!this.audioContext) return;
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
+    this.ensureResumed();
 
     const duration = 0.2;
 
@@ -448,15 +458,8 @@ export class AudioManager {
 
   startSaucerSound(): void {
     if (!this.audioContext) return;
-
-    // If context is suspended, wait for it to resume before playing
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume().then(() => {
-        this.startSaucerSoundNow();
-      });
-    } else {
-      this.startSaucerSoundNow();
-    }
+    this.ensureResumed();
+    this.startSaucerSoundNow();
   }
 
   private startSaucerSoundNow(): void {
