@@ -16,13 +16,24 @@ export class AudioManager {
   ];
 
   constructor() {
-    // Initialize audio context on first user interaction
-    document.addEventListener('click', () => this.initAudio(), { once: true });
+    // Initialize audio context on first user interaction (click or touch)
+    const initOnInteraction = () => {
+      this.initAudio();
+      // Remove both listeners after first interaction
+      document.removeEventListener('click', initOnInteraction);
+      document.removeEventListener('touchstart', initOnInteraction);
+    };
+    document.addEventListener('click', initOnInteraction);
+    document.addEventListener('touchstart', initOnInteraction);
   }
 
   private initAudio(): void {
     if (!this.audioContext) {
       this.audioContext = new AudioContext();
+    }
+    // Resume if suspended (required for mobile)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
     }
   }
 

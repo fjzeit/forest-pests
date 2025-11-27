@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Forest Pests - First Person</title>
   <meta name="description" content="A first-person arcade shooter inspired by classic Space Invaders">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/images/icon-192.png">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
@@ -30,6 +35,7 @@
     html, body {
       width: 100%;
       height: 100%;
+      height: 100dvh; /* Dynamic viewport height for Safari */
       overflow: hidden;
       background: #000;
       display: flex;
@@ -427,21 +433,54 @@
       display: none;
     }
 
-    /* Joystick Zone - left side of screen */
-    #joystick-zone {
+    /* Left controls container - joystick and fire button */
+    #left-controls {
       position: absolute;
       left: 0;
       top: 0;
-      width: 30%;
+      width: 150px;
       height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding-bottom: 20px;
+      pointer-events: none;
+    }
+
+    /* Fire button - above joystick */
+    #fire-button {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 50, 50, 0.25);
+      border: 3px solid rgba(255, 50, 50, 0.6);
+      color: #ff5555;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-shadow: 0 0 5px rgba(255, 50, 50, 0.8);
+      box-shadow: 0 0 15px rgba(255, 50, 50, 0.3);
+      margin-bottom: 20px;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    #fire-button.active {
+      background: rgba(255, 100, 100, 0.5);
+      box-shadow: 0 0 25px rgba(255, 50, 50, 0.7);
+    }
+
+    /* Joystick Zone */
+    #joystick-zone {
+      position: relative;
+      width: 120px;
+      height: 120px;
       pointer-events: auto;
       touch-action: none;
     }
     #joystick-base {
-      position: absolute;
-      bottom: 20%;
-      left: 50%;
-      transform: translateX(-50%);
       width: 120px;
       height: 120px;
       border-radius: 50%;
@@ -460,13 +499,13 @@
       box-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
     }
 
-    /* Aim+Fire Zone - right side of screen (game area) */
-    #aim-fire-zone {
+    /* Aim Zone - right side of screen (game area) */
+    #aim-zone {
       position: absolute;
       top: 0;
       right: 0;
       bottom: 0;
-      left: 30%;
+      left: 150px;
       pointer-events: auto;
       touch-action: none;
     }
@@ -488,8 +527,11 @@
         touch-action: none;
         -webkit-touch-callout: none;
         -webkit-user-select: none;
-        max-width: 70%;
-        max-height: 100%;
+        aspect-ratio: unset;
+        width: calc(100% - 150px);
+        height: 100%;
+        max-width: none;
+        max-height: none;
         border: none;
         border-radius: 0;
         box-shadow: none;
@@ -506,6 +548,7 @@
         width: 100%;
         height: 100%;
         z-index: 3000;
+        pointer-events: auto;
       }
       /* Hide desktop controls text, show mobile */
       .controls-desktop { display: none !important; }
@@ -517,8 +560,8 @@
       html {
         transform: rotate(90deg);
         transform-origin: top left;
-        width: 100vh;
-        height: 100vw;
+        width: 100dvh;
+        height: 100dvw;
         position: absolute;
         top: 0;
         left: 100%;
@@ -565,8 +608,8 @@
           <div id="start-prompt">
             <div class="controls controls-desktop">WASD - MOVE</div>
             <div class="controls controls-desktop">MOUSE - AIM &amp; SHOOT</div>
-            <div class="controls controls-mobile">LEFT THUMB - MOVE</div>
-            <div class="controls controls-mobile">RIGHT THUMB - AIM &amp; FIRE</div>
+            <div class="controls controls-mobile">JOYSTICK - MOVE | FIRE BUTTON</div>
+            <div class="controls controls-mobile">DRAG SCREEN - AIM</div>
             <div class="press-start controls-desktop">PRESS ANY KEY TO START</div>
             <div class="press-start controls-mobile">TAP TO START</div>
           </div>
@@ -577,12 +620,15 @@
   </div>
   <!-- Touch Controls outside game container for proper layout -->
   <div id="touch-controls" class="hidden">
-    <div id="joystick-zone">
-      <div id="joystick-base">
-        <div id="joystick-knob"></div>
+    <div id="left-controls">
+      <div id="fire-button">FIRE</div>
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-knob"></div>
+        </div>
       </div>
     </div>
-    <div id="aim-fire-zone"></div>
+    <div id="aim-zone"></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

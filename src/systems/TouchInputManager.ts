@@ -17,11 +17,12 @@ export class TouchInputManager {
   private joystickZone: HTMLElement;
   private joystickBase: HTMLElement;
   private joystickKnob: HTMLElement;
-  private aimFireZone: HTMLElement;
+  private aimZone: HTMLElement;
+  private fireButton: HTMLElement;
 
   // Touch tracking
   private joystickTouch: TouchPoint | null = null;
-  private aimFireTouch: TouchPoint | null = null;
+  private aimTouch: TouchPoint | null = null;
 
   // Joystick config
   private joystickRadius: number;
@@ -41,7 +42,8 @@ export class TouchInputManager {
     this.joystickZone = document.getElementById('joystick-zone')!;
     this.joystickBase = document.getElementById('joystick-base')!;
     this.joystickKnob = document.getElementById('joystick-knob')!;
-    this.aimFireZone = document.getElementById('aim-fire-zone')!;
+    this.aimZone = document.getElementById('aim-zone')!;
+    this.fireButton = document.getElementById('fire-button')!;
 
     this.bindEvents();
   }
@@ -53,11 +55,16 @@ export class TouchInputManager {
     this.joystickZone.addEventListener('touchend', (e) => this.onJoystickEnd(e), { passive: false });
     this.joystickZone.addEventListener('touchcancel', (e) => this.onJoystickEnd(e), { passive: false });
 
-    // Aim+Fire zone events (touch to aim and fire simultaneously)
-    this.aimFireZone.addEventListener('touchstart', (e) => this.onAimFireStart(e), { passive: false });
-    this.aimFireZone.addEventListener('touchmove', (e) => this.onAimFireMove(e), { passive: false });
-    this.aimFireZone.addEventListener('touchend', (e) => this.onAimFireEnd(e), { passive: false });
-    this.aimFireZone.addEventListener('touchcancel', (e) => this.onAimFireEnd(e), { passive: false });
+    // Aim zone events (aim only, no fire)
+    this.aimZone.addEventListener('touchstart', (e) => this.onAimStart(e), { passive: false });
+    this.aimZone.addEventListener('touchmove', (e) => this.onAimMove(e), { passive: false });
+    this.aimZone.addEventListener('touchend', (e) => this.onAimEnd(e), { passive: false });
+    this.aimZone.addEventListener('touchcancel', (e) => this.onAimEnd(e), { passive: false });
+
+    // Fire button events
+    this.fireButton.addEventListener('touchstart', (e) => this.onFireStart(e), { passive: false });
+    this.fireButton.addEventListener('touchend', (e) => this.onFireEnd(e), { passive: false });
+    this.fireButton.addEventListener('touchcancel', (e) => this.onFireEnd(e), { passive: false });
   }
 
   // Joystick handlers
@@ -135,13 +142,13 @@ export class TouchInputManager {
     }
   }
 
-  // Aim+Fire handlers - touch to aim and fire simultaneously
-  private onAimFireStart(e: TouchEvent): void {
+  // Aim handlers - touch to aim only
+  private onAimStart(e: TouchEvent): void {
     e.preventDefault();
-    if (this.aimFireTouch) return; // Already tracking
+    if (this.aimTouch) return; // Already tracking
 
     const touch = e.changedTouches[0];
-    this.aimFireTouch = {
+    this.aimTouch = {
       id: touch.identifier,
       startX: touch.clientX,
       startY: touch.clientY,
@@ -150,16 +157,13 @@ export class TouchInputManager {
     };
     this.lastAimX = touch.clientX;
     this.lastAimY = touch.clientY;
-
-    // Start firing when touching
-    this.inputManager.setTouchFiring(true);
   }
 
-  private onAimFireMove(e: TouchEvent): void {
+  private onAimMove(e: TouchEvent): void {
     e.preventDefault();
-    if (!this.aimFireTouch) return;
+    if (!this.aimTouch) return;
 
-    const touch = this.findTouch(e.changedTouches, this.aimFireTouch.id);
+    const touch = this.findTouch(e.changedTouches, this.aimTouch.id);
     if (!touch) return;
 
     // Calculate delta since last frame
@@ -173,16 +177,27 @@ export class TouchInputManager {
     this.inputManager.setTouchAimDelta(deltaX, deltaY);
   }
 
-  private onAimFireEnd(e: TouchEvent): void {
+  private onAimEnd(e: TouchEvent): void {
     e.preventDefault();
-    if (!this.aimFireTouch) return;
+    if (!this.aimTouch) return;
 
-    const touch = this.findTouch(e.changedTouches, this.aimFireTouch.id);
+    const touch = this.findTouch(e.changedTouches, this.aimTouch.id);
     if (touch || e.type === 'touchcancel') {
-      this.aimFireTouch = null;
-      // Stop firing when releasing
-      this.inputManager.setTouchFiring(false);
+      this.aimTouch = null;
     }
+  }
+
+  // Fire button handlers
+  private onFireStart(e: TouchEvent): void {
+    e.preventDefault();
+    this.fireButton.classList.add('active');
+    this.inputManager.setTouchFiring(true);
+  }
+
+  private onFireEnd(e: TouchEvent): void {
+    e.preventDefault();
+    this.fireButton.classList.remove('active');
+    this.inputManager.setTouchFiring(false);
   }
 
   // Utility
@@ -202,8 +217,9 @@ export class TouchInputManager {
     this.touchControls.classList.add('hidden');
     // Reset all input when hiding
     this.joystickTouch = null;
-    this.aimFireTouch = null;
+    this.aimTouch = null;
     this.joystickKnob.style.transform = 'translate(0, 0)';
+    this.fireButton.classList.remove('active');
     this.inputManager.setTouchMoveInput(0, 0);
     this.inputManager.setTouchFiring(false);
   }

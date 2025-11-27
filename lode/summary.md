@@ -480,5 +480,11 @@ npm install                    # Install dependencies
 npm run dev                    # Start dev server (Vite)
 npm run dev -- --host          # Dev server on all interfaces (for mobile testing)
 npm run dev -- --host --https  # Dev server with HTTPS (requires @vitejs/plugin-basic-ssl)
-npm run build                  # Production build
+npm run build                  # Production build to dist/
 ```
+
+## Deployment
+
+Manual deployment from `dist/` folder:
+1. Run `npm run build`
+2. Copy contents of `dist/` to hosting destination

@@ -1,0 +1,22 @@
+{
+  "name": "Forest Pests",
+  "short_name": "Forest Pests",
+  "description": "A first-person arcade shooter inspired by classic Space Invaders",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#00ff88",
+  "icons": [
+    {
+      "src": "/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
